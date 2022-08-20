@@ -17,4 +17,6 @@ opt-level = 3
 
 [dependencies]
 bevy = "0.8"
+bevy_fps_controller = "0.1.2-dev"
+bevy_rapier3d = "0.16"
 bevy_editor_pls = { version = "0.1", optional = true }
