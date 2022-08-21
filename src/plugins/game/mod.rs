@@ -67,10 +67,14 @@ fn setup(
         .insert(Ccd { enabled: true }) // Prevent clipping when going fast
         .insert(Transform::from_xyz(0.0, 3.0, 0.0))
         .insert(LogicalPlayer(0))
-        .insert(FpsControllerInput {
+        .insert(FpsControllerInput { ..default() })
+        .insert(FpsController {
+            key_forward: KeyCode::Z,
+            key_left: KeyCode::Q,
+            key_back: KeyCode::S,
+            key_right: KeyCode::D,
             ..default()
-        })
-        .insert(FpsController { ..default() });
+        });
     commands
         .spawn_bundle(Camera3dBundle::default())
         .insert(RenderPlayer(0));
