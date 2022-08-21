@@ -21,6 +21,7 @@ impl Plugin for GamePlugin {
 
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
         app.add_plugin(FpsControllerPlugin);
+        app.add_plugin(portal::PortalPlugin);
 
         app.add_startup_system(setup);
     }
@@ -66,8 +67,6 @@ fn setup(
         .insert(Transform::from_xyz(0.0, 3.0, 0.0))
         .insert(LogicalPlayer(0))
         .insert(FpsControllerInput {
-            pitch: -TAU / 12.0,
-            yaw: TAU * 5.0 / 8.0,
             ..default()
         })
         .insert(FpsController { ..default() });
