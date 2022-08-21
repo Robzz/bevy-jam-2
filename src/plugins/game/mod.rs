@@ -21,6 +21,7 @@ impl Plugin for GamePlugin {
 
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
         app.add_plugin(FpsControllerPlugin);
+        app.add_plugin(input::InputPlugin);
         app.add_plugin(portal::PortalPlugin);
 
         app.add_startup_system(setup);

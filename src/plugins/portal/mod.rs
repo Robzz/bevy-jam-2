@@ -3,10 +3,10 @@ use bevy::{
     reflect::FromReflect,
     render::{
         camera::RenderTarget,
-        primitives::Frustum,
         render_resource::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-        }, view::RenderLayers,
+        },
+        view::RenderLayers,
     },
 };
 use bevy_fps_controller::controller::RenderPlayer;
@@ -103,8 +103,7 @@ impl PortalPlugin {
             if let Ok((previous_portal, entity)) = portal_query.get_single() {
                 info!("Despawning previous portal");
                 if let Some(cam) = previous_portal.camera {
-                    commands.entity(cam)
-                        .despawn_recursive();
+                    commands.entity(cam).despawn_recursive();
                 }
                 commands.entity(entity).despawn_recursive();
             }
@@ -226,7 +225,9 @@ fn update_main_camera(
         let primary_win = windows.get_primary().unwrap();
         if let Ok((camera, entity)) = cameras_query.get_single_mut() {
             if camera.target == RenderTarget::Window(primary_win.id()) {
-                commands.entity(entity)
+                // Add the portals render layer so the main camera can render them.
+                commands
+                    .entity(entity)
                     .insert(RenderLayers::default().with(1));
                 info!("Updating main camera to entity {:?}", entity);
                 portal_res.main_camera = Some(entity);
@@ -262,14 +263,10 @@ fn fire_portal<const N: u32>(
 fn create_portal_cameras<const N: u32>(
     mut commands: Commands,
     mut portal_query: Query<&mut Portal<N>>,
-    camera_query: Query<&Frustum>,
     portal_res: Res<PortalResources>,
 ) {
     if let Ok(mut portal) = portal_query.get_single_mut() {
         if portal.camera.is_none() && portal_res.main_camera.is_some() {
-            let frustum = camera_query
-                .get(portal_res.main_camera.unwrap())
-                .unwrap();
             portal.camera = Some(
                 commands
                     .spawn_bundle(Camera3dBundle {
@@ -281,8 +278,11 @@ fn create_portal_cameras<const N: u32>(
                             ),
                             ..default()
                         },
-                        frustum: *frustum, // WRONG: we render to a square texture, make the
-                                           // correct projection
+                        projection: PerspectiveProjection {
+                            aspect_ratio: 1.,
+                            ..default()
+                        }
+                        .into(),
                         ..default()
                     })
                     .id(),
