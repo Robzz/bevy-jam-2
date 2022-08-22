@@ -14,7 +14,13 @@ pub fn make_test_arena(
 ) {
     const WALL_THICKNESS: f32 = 0.5;
 
-    let walls_material = materials.add(StandardMaterial::from(Color::RED));
+    let walls_materials = [
+        materials.add(StandardMaterial::from(Color::RED)),
+        materials.add(StandardMaterial::from(Color::GREEN)),
+        materials.add(StandardMaterial::from(Color::BLUE)),
+        materials.add(StandardMaterial::from(Color::ANTIQUE_WHITE)),
+    ];
+    let ground_material = materials.add(StandardMaterial::from(Color::DARK_GRAY));
 
     let half_len = length / 2.;
     let wall_mesh = meshes.add(
@@ -42,7 +48,7 @@ pub fn make_test_arena(
 
     let mut ground = commands.spawn_bundle(PbrBundle {
         mesh: ground_mesh,
-        material: walls_material.clone(),
+        material: ground_material,
         transform: Transform::from_xyz(0., -WALL_THICKNESS / 2., 0.),
         ..default()
     });
@@ -53,12 +59,12 @@ pub fn make_test_arena(
     ));
 
     ground.with_children(|parent| {
-        for i in 0..4 {
+        for (i, mat) in walls_materials.into_iter().enumerate() {
             let mut transform = Transform::from_xyz(0., height / 2., -(half_len + WALL_THICKNESS / 2.));
             transform.rotate_around(Vec3::new(0., height / 2., 0.), Quat::from_axis_angle(Vec3::Y, i as f32 * FRAC_PI_2));
             parent.spawn_bundle(PbrBundle {
                 mesh: wall_mesh.clone(),
-                material: walls_material.clone(),
+                material: mat,
                 transform,
                 ..default()
             }).insert_bundle((

@@ -20,6 +20,7 @@ impl Plugin for GamePlugin {
         }
 
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
+        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(FpsControllerPlugin);
         app.add_plugin(input::InputPlugin);
         app.add_plugin(portal::PortalPlugin);

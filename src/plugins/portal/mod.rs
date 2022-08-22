@@ -1,8 +1,11 @@
+use bevy_prototype_debug_lines::DebugLines;
+use std::{ops::DerefMut, f32::consts::PI};
+
 use bevy::{
     prelude::*,
     reflect::FromReflect,
     render::{
-        camera::RenderTarget,
+        camera::{RenderTarget, Projection},
         render_resource::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
@@ -33,12 +36,20 @@ struct PortalResources {
     open_materials: [Handle<PortalMaterial>; 2],
     mesh: Handle<Mesh>,
     main_camera: Option<Entity>,
+    dbg_sphere_mesh: Handle<Mesh>,
+    dbg_material: Handle<StandardMaterial>
 }
 
 #[derive(Debug, Default, Component, Reflect, FromReflect)]
 pub struct Portal<const N: u32> {
+    /// The camera which is used to render to the texture applied to this portal
+    /// This camera is positioned to look at the other portal from behind, with the same relative
+    /// position.
     camera: Option<Entity>,
 }
+
+#[derive(Debug, Default, Component, Reflect, FromReflect)]
+pub struct PortalCamera<const N: u32>;
 
 impl<const N: u32> Portal<N> {
     pub const fn mouse_button() -> MouseButton {
@@ -162,6 +173,7 @@ fn load_portal_assets(
     assets: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<PortalMaterial>>,
+    mut std_materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let tex_a = assets.load("textures/portal_a.png");
@@ -204,6 +216,9 @@ fn load_portal_assets(
         })
     }
 
+    let dbg_mesh = meshes.add(shape::UVSphere { radius: 0.5, sectors: 12, stacks: 12 }.into());
+    let dbg_mat = std_materials.add(Color::PURPLE.into());
+
     commands.insert_resource(PortalResources {
         texture_a: tex_a,
         texture_b: tex_b,
@@ -211,6 +226,8 @@ fn load_portal_assets(
         open_materials,
         mesh: portal_mesh,
         main_camera: None,
+        dbg_sphere_mesh: dbg_mesh,
+        dbg_material: dbg_mat,
     });
 }
 
@@ -231,7 +248,6 @@ fn update_main_camera(
                     .insert(RenderLayers::default().with(1));
                 info!("Updating main camera to entity {:?}", entity);
                 portal_res.main_camera = Some(entity);
-                return;
             }
         }
     }
@@ -285,6 +301,9 @@ fn create_portal_cameras<const N: u32>(
                         .into(),
                         ..default()
                     })
+                    .with_children(|portal| { portal.spawn_bundle ( PbrBundle { mesh: portal_res.dbg_sphere_mesh.clone(), material: portal_res.dbg_material.clone(), ..default() } ); })
+                    .insert(PortalCamera::<N>)
+                    .insert_bundle(VisibilityBundle { visibility: Visibility::visible(), ..default() })
                     .id(),
             );
         }
@@ -292,9 +311,39 @@ fn create_portal_cameras<const N: u32>(
 }
 
 fn sync_portal_cameras(
-    mut _commands: Commands,
-    _portal_query_a: Query<&Transform, With<Portal<0>>>,
-    _portal_query_b: Query<&Transform, With<Portal<1>>>,
+    main_camera_query: Query<&Transform, (With<RenderPlayer>, Without<PortalCamera<0>>, Without<PortalCamera<1>>)>,
+    portal_query_a: Query<&Transform, (With<Portal<0>>, Without<PortalCamera<0>>, Without<PortalCamera<1>>)>,
+    portal_query_b: Query<&Transform, (With<Portal<1>>, Without<PortalCamera<0>>, Without<PortalCamera<1>>)>,
+    mut portal_cam_a_query: Query<(&mut Transform, &mut Projection), (With<PortalCamera<0>>, Without<PortalCamera<1>>)>,
+    mut portal_cam_b_query: Query<(&mut Transform, &mut Projection), (With<PortalCamera<1>>, Without<PortalCamera<0>>)>,
+    mut lines: ResMut<DebugLines>
 ) {
-    // Place camera behind first portal to render second portal view.
+    if let (Ok(trf_a), Ok(trf_b), Ok(trf_main_cam), Ok((mut cam_a_trf, mut proj_a)), Ok((mut cam_b_trf, mut proj_b))) = (
+        portal_query_a.get_single(),
+        portal_query_b.get_single(),
+        main_camera_query.get_single(),
+        portal_cam_a_query.get_single_mut(),
+        portal_cam_b_query.get_single_mut()
+    ) {
+        if let (Projection::Perspective(ref mut persp_a), Projection::Perspective(ref mut persp_b)) = (proj_a.deref_mut(), proj_b.deref_mut()) {
+            // Position the render camera for portal A behind portal B
+            // For this, we express the transformation between the main camera and portal A, then
+            // apply it between the virtual camera and portal B.
+            let rot = Quat::from_rotation_y(PI);
+            //let rot = Mat4::IDENTITY;
+            let cam_to_portal_a = Transform::from_matrix(trf_a.compute_matrix() * trf_main_cam.compute_matrix().inverse());
+            let cam_to_portal_b = Transform::from_matrix(trf_b.compute_matrix() * trf_main_cam.compute_matrix().inverse());
+            *cam_a_trf = cam_to_portal_a.mul_transform(*trf_b);
+            cam_a_trf.rotation *= rot;
+            *cam_b_trf = cam_to_portal_b.mul_transform(*trf_a);
+            cam_b_trf.rotation *= rot;
+
+            lines.line(cam_a_trf.translation, cam_a_trf.translation + cam_a_trf.forward() * 3., 0.0);
+            lines.line(cam_a_trf.translation, cam_a_trf.translation + cam_a_trf.forward() * 3., 0.0);
+
+            // TODO: oblique perspective projection
+            persp_a.near = cam_a_trf.translation.distance(trf_b.translation);
+            persp_b.near = cam_b_trf.translation.distance(trf_a.translation);
+        }
+    }
 }
