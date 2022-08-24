@@ -2,10 +2,7 @@ use std::f32::consts::FRAC_PI_4;
 
 use bevy::{
     prelude::*,
-    render::{
-        camera::{CameraProjection, DepthCalculation},
-        primitives::Plane,
-    },
+    render::camera::{CameraProjection, DepthCalculation},
 };
 
 /// Camera projection which allows for an oblique near clipping plane, used for rendering portal virtual cameras.
@@ -32,10 +29,10 @@ impl Default for PortalCameraProjection {
 
 impl CameraProjection for PortalCameraProjection {
     fn get_projection_matrix(&self) -> Mat4 {
-        // Here the fun begins. Math taken from https://www.terathon.com/lengyel/Lengyel-Oblique.pdf
+        // Math taken from https://www.terathon.com/lengyel/Lengyel-Oblique.pdf
         let proj_mat = Mat4::perspective_infinite_rh(self.fov, self.aspect_ratio, 0.5);
         let proj_mat_inv = proj_mat.inverse();
-        let mut oblique_proj_mat = proj_mat.clone();
+        let mut oblique_proj_mat = proj_mat;
 
         let c = self.near;
         let m4 = proj_mat.row(3);

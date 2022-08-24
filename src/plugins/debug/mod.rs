@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 pub mod draw;
-pub mod dump;
 
 use bevy::prelude::PluginGroup;
 

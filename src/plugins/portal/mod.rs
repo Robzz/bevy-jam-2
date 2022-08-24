@@ -137,8 +137,12 @@ impl PortalPlugin {
                         ..default()
                     })
                     // Render portals on a separate layer so the portal cameras can turn them off
-                    .insert(RenderLayers::layer(1))
-                    .insert(Portal::<N>::default())
+                    .insert_bundle((
+                        RenderLayers::layer(1),
+                        Portal::<N>::default(),
+                        Collider::cuboid(1., 1., 0.6),
+                        Sensor
+                    ))
                     .id(),
             )
         } else {

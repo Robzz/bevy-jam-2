@@ -19,7 +19,6 @@ impl Plugin for GamePlugin {
             app.add_plugins(debug::DeveloperPlugins);
         }
 
-        app.add_plugin(bevy_capture_media::BevyCapturePlugin);
         app.add_plugin(portal::PortalPlugin);
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
         app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
