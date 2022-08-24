@@ -16,14 +16,15 @@ impl Plugin for GamePlugin {
 
         #[cfg(feature = "devel")]
         {
-            app.add_plugins(dev_plugins::DeveloperPlugins);
+            app.add_plugins(debug::DeveloperPlugins);
         }
 
+        app.add_plugin(bevy_capture_media::BevyCapturePlugin);
+        app.add_plugin(portal::PortalPlugin);
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
         app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(FpsControllerPlugin);
         app.add_plugin(input::InputPlugin);
-        app.add_plugin(portal::PortalPlugin);
 
         app.add_startup_system(setup);
     }
@@ -54,6 +55,7 @@ fn setup(
         ..default()
     });
 
+    //let player_mesh = meshes.add(shape::Capsule { radius: 0.6, depth: 0.8, ..default() }.into());
     // Spawn player
     commands
         .spawn()
@@ -74,6 +76,7 @@ fn setup(
             key_left: KeyCode::Q,
             key_back: KeyCode::S,
             key_right: KeyCode::D,
+            key_fly: KeyCode::Back,
             ..default()
         });
     commands

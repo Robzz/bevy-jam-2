@@ -1,5 +1,5 @@
 #[cfg(feature = "devel")]
-pub mod dev_plugins;
+pub mod debug;
 
 pub mod game;
 pub mod input;
