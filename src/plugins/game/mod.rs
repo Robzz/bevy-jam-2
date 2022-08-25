@@ -7,11 +7,17 @@ use bevy_rapier3d::prelude::*;
 use leafwing_input_manager::prelude::ActionState;
 
 use super::{
-    first_person_controller::{FirstPersonController, FirstPersonControllerBundle, FirstPersonCamera},
+    first_person_controller::{
+        FirstPersonCamera, FirstPersonController, FirstPersonControllerBundle,
+    },
     input::Actions,
     physics::*,
     portal::PortalTeleport,
 };
+
+// region:    --- Asset Constants
+const CROSSHAIR_SPRITE: &str = "crosshair.png";
+// endregion: --- Game Constants
 
 #[derive(Debug)]
 /// Main game plugin, responsible for loading the other game plugins and bootstrapping the game.
@@ -21,6 +27,7 @@ pub struct GamePlugin;
 pub struct GameResources {
     cube_mesh: Handle<Mesh>,
     cube_material: Handle<StandardMaterial>,
+    crosshair: Handle<Image>,
 }
 
 #[derive(Bundle)]
@@ -69,6 +76,7 @@ impl Plugin for GamePlugin {
                 .with_system(setup)
                 .with_system(init_resources),
         )
+        .add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
         .add_system(throw_cube);
     }
 }
@@ -79,6 +87,7 @@ fn init_resources(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
     let mesh = meshes.add(shape::Cube { size: 0.2 }.into());
     let material = materials.add(StandardMaterial {
@@ -91,6 +100,7 @@ fn init_resources(
     commands.insert_resource(GameResources {
         cube_mesh: mesh,
         cube_material: material,
+        crosshair: asset_server.load(CROSSHAIR_SPRITE),
     });
 }
 
@@ -155,4 +165,16 @@ fn throw_cube(
             });
         }
     }
+}
+
+fn crosshair(mut commands: Commands, res: Res<GameResources>) {
+    // crosshair
+    commands.spawn_bundle(SpriteBundle {
+        texture: res.crosshair.clone(),
+        transform: Transform {
+            scale: Vec3::new(5., 5., 1.),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 }
