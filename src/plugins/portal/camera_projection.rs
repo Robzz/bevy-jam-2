@@ -31,7 +31,7 @@ impl CameraProjection for PortalCameraProjection {
     fn get_projection_matrix(&self) -> Mat4 {
         // Math taken from https://www.terathon.com/lengyel/Lengyel-Oblique.pdf
         let proj_mat = Mat4::perspective_infinite_rh(self.fov, self.aspect_ratio, 0.5);
-        let proj_mat_inv = proj_mat.inverse();
+        let proj_mat_inv = dbg!(proj_mat.inverse());
         let mut oblique_proj_mat = proj_mat;
 
         let c = self.near;
@@ -45,7 +45,14 @@ impl CameraProjection for PortalCameraProjection {
         oblique_proj_mat.z_axis.z = new_m3.z;
         oblique_proj_mat.w_axis.z = new_m3.w;
 
-        oblique_proj_mat
+        let rev_depth = Mat4 {
+            x_axis: Vec4::X,
+            y_axis: Vec4::Y,
+            z_axis: Vec4::NEG_Z,
+            w_axis: Vec4::Z + Vec4::W,
+        };
+
+        rev_depth * oblique_proj_mat
     }
 
     fn update(&mut self, width: f32, height: f32) {
