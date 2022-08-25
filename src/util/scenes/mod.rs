@@ -3,6 +3,8 @@ use std::f32::consts::FRAC_PI_2;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+use crate::plugins::physics::*;
+
 /// Setup a test room in a square flate arena format of specified size.
 /// 5 cubes for the walls and floor, with physics colliders.
 pub fn make_test_arena(
@@ -55,7 +57,8 @@ pub fn make_test_arena(
     ground.insert_bundle((
         Name::from("Ground"),
         RigidBody::Fixed,
-        Collider::cuboid(half_len, WALL_THICKNESS / 2., half_len)
+        Collider::cuboid(half_len, WALL_THICKNESS / 2., half_len),
+        CollisionGroups::new(FIXED_GEOMETRY_GROUP, ALL_GROUPS)
     ));
 
     ground.with_children(|parent| {
@@ -70,7 +73,8 @@ pub fn make_test_arena(
             }).insert_bundle((
                 Name::from(format!("Wall_{}", i)),
                 RigidBody::Fixed,
-                Collider::cuboid(half_len, height / 2., WALL_THICKNESS / 2.)
+                Collider::cuboid(half_len, height / 2., WALL_THICKNESS / 2.),
+                CollisionGroups::new(FIXED_GEOMETRY_GROUP, ALL_GROUPS)
             ));
         }
     });
