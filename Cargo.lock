@@ -225,6 +225,7 @@ dependencies = [
  "bevy-inspector-egui-derive",
  "bevy_egui",
  "image 0.23.14",
+ "nalgebra",
  "pretty-type-name",
 ]
 
@@ -237,6 +238,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "bevy-inspector-egui-rapier"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef372e6960033ec7a04b259c9a08b6a9fb5e3f6b4698091dc58aad4a4d6bc5d"
+dependencies = [
+ "bevy",
+ "bevy-inspector-egui",
+ "bevy_rapier3d",
 ]
 
 [[package]]
@@ -967,6 +979,7 @@ name = "bevyjam_2"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy-inspector-egui-rapier",
  "bevy_editor_pls",
  "bevy_prototype_debug_lines",
  "bevy_rapier3d",
@@ -1611,9 +1624,9 @@ dependencies = [
 
 [[package]]
 name = "erased-serde"
-version = "0.3.22"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003000e712ad0f95857bd4d2ef8d1890069e06554101697d12050668b2f6f020"
+checksum = "54558e0ba96fbe24280072642eceb9d7d442e32c7ec0ea9e7ecd7b4ea2cf4e11"
 dependencies = [
  "serde",
 ]

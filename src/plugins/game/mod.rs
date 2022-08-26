@@ -23,37 +23,6 @@ const CROSSHAIR_SPRITE: &str = "crosshair.png";
 /// Main game plugin, responsible for loading the other game plugins and bootstrapping the game.
 pub struct GamePlugin;
 
-#[derive(Debug, Clone, Default, Reflect)]
-pub struct GameResources {
-    cube_mesh: Handle<Mesh>,
-    cube_material: Handle<StandardMaterial>,
-    crosshair: Handle<Image>,
-}
-
-#[derive(Bundle)]
-pub struct PhysicsCubeBundle {
-    #[bundle]
-    pbr_bundle: PbrBundle,
-    collider: Collider,
-    initial_velocity: Velocity,
-    rigidbody: RigidBody,
-    groups: CollisionGroups,
-    teleport: PortalTeleport,
-}
-
-impl Default for PhysicsCubeBundle {
-    fn default() -> Self {
-        PhysicsCubeBundle {
-            pbr_bundle: PbrBundle::default(),
-            collider: Collider::cuboid(CUBE_SIZE / 2., CUBE_SIZE / 2., CUBE_SIZE / 2.),
-            initial_velocity: Velocity::default(),
-            rigidbody: RigidBody::Dynamic,
-            groups: CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
-            teleport: PortalTeleport,
-        }
-    }
-}
-
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(DefaultPlugins);
@@ -64,7 +33,6 @@ impl Plugin for GamePlugin {
         }
 
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
-        //app.add_plugin(RapierDebugRenderPlugin::default());
         //app.add_plugin(physics::PhysicsPlugin);
         app.add_plugin(portal::PortalPlugin);
         app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
@@ -78,6 +46,40 @@ impl Plugin for GamePlugin {
         )
         .add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
         .add_system(throw_cube);
+    }
+}
+
+#[derive(Debug, Clone, Default, Reflect)]
+pub struct GameResources {
+    cube_mesh: Handle<Mesh>,
+    cube_material: Handle<StandardMaterial>,
+    crosshair: Handle<Image>,
+}
+
+#[derive(Bundle)]
+/// Defines the ECS components of a physically driven cube prop.
+pub struct PhysicsCubeBundle {
+    #[bundle]
+    pbr_bundle: PbrBundle,
+    collider: Collider,
+    initial_velocity: Velocity,
+    rigidbody: RigidBody,
+    groups: CollisionGroups,
+    teleport: PortalTeleport,
+    ccd: Ccd
+}
+
+impl Default for PhysicsCubeBundle {
+    fn default() -> Self {
+        PhysicsCubeBundle {
+            pbr_bundle: PbrBundle::default(),
+            collider: Collider::cuboid(CUBE_SIZE / 2., CUBE_SIZE / 2., CUBE_SIZE / 2.),
+            initial_velocity: Velocity::default(),
+            rigidbody: RigidBody::Dynamic,
+            groups: CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
+            teleport: PortalTeleport,
+            ccd: Ccd::enabled()
+        }
     }
 }
 
@@ -111,7 +113,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     //asset_server: Res<AssetServer>
 ) {
-    make_test_arena(&mut commands, &mut meshes, &mut materials, 20., 3.);
+    make_test_arena(&mut commands, &mut meshes, &mut materials, 20., 5.);
 
     // Light
     commands.spawn_bundle(DirectionalLightBundle {
@@ -140,6 +142,7 @@ fn setup(
     });
 }
 
+/// Throw a physically driven cube in front of the player.
 fn throw_cube(
     mut commands: Commands,
     player_query: Query<&ActionState<Actions>, With<FirstPersonController>>,

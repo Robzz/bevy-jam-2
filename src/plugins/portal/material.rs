@@ -12,4 +12,14 @@ impl Material for PortalMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/portal.wgsl".into()
     }
+
+    fn specialize(
+        pipeline: &bevy::pbr::MaterialPipeline<Self>,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        layout: &bevy::render::mesh::MeshVertexBufferLayout,
+        key: bevy::pbr::MaterialPipelineKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        descriptor.primitive.cull_mode = None;
+        Ok(())
+    }
 }

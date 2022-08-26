@@ -12,9 +12,9 @@ pub fn make_test_arena(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     length: f32,
-    height: f32
+    height: f32,
 ) {
-    const WALL_THICKNESS: f32 = 0.5;
+    const WALL_THICKNESS: f32 = 1.;
 
     let walls_materials = [
         materials.add(StandardMaterial::from(Color::RED)),
@@ -34,48 +34,67 @@ pub fn make_test_arena(
             min_z: -WALL_THICKNESS / 2.,
             max_z: WALL_THICKNESS / 2.,
         }
-        .into()
+        .into(),
     );
     let ground_mesh = meshes.add(
         shape::Box {
-            min_x: -half_len,
-            max_x: half_len,
+            min_x: -half_len * 1.1,
+            max_x: half_len * 1.1,
             min_y: -WALL_THICKNESS / 2.,
             max_y: WALL_THICKNESS / 2.,
-            min_z: -half_len,
-            max_z: half_len,
+            min_z: -half_len * 1.1,
+            max_z: half_len * 1.1,
         }
-        .into()
+        .into(),
     );
 
     let mut ground = commands.spawn_bundle(PbrBundle {
-        mesh: ground_mesh,
-        material: ground_material,
+        mesh: ground_mesh.clone(),
+        material: ground_material.clone(),
         transform: Transform::from_xyz(0., -WALL_THICKNESS / 2., 0.),
         ..default()
     });
     ground.insert_bundle((
         Name::from("Ground"),
         RigidBody::Fixed,
-        Collider::cuboid(half_len, WALL_THICKNESS / 2., half_len),
-        CollisionGroups::new(FIXED_GEOMETRY_GROUP, ALL_GROUPS)
+        Collider::cuboid(half_len * 1.1, WALL_THICKNESS / 2., half_len * 1.1),
+        CollisionGroups::new(GROUND_GROUP, ALL_GROUPS),
     ));
 
     ground.with_children(|parent| {
         for (i, mat) in walls_materials.into_iter().enumerate() {
-            let mut transform = Transform::from_xyz(0., height / 2., -(half_len + WALL_THICKNESS / 2.));
-            transform.rotate_around(Vec3::new(0., height / 2., 0.), Quat::from_axis_angle(Vec3::Y, i as f32 * FRAC_PI_2));
-            parent.spawn_bundle(PbrBundle {
-                mesh: wall_mesh.clone(),
-                material: mat,
-                transform,
-                ..default()
-            }).insert_bundle((
-                Name::from(format!("Wall_{}", i)),
-                RigidBody::Fixed,
-                Collider::cuboid(half_len, height / 2., WALL_THICKNESS / 2.),
-                CollisionGroups::new(FIXED_GEOMETRY_GROUP, ALL_GROUPS)
-            ));
+            let mut transform =
+                Transform::from_xyz(0., height / 2., -(half_len + WALL_THICKNESS / 2.));
+            transform.rotate_around(
+                Vec3::new(0., height / 2., 0.),
+                Quat::from_axis_angle(Vec3::Y, i as f32 * FRAC_PI_2),
+            );
+            parent
+                .spawn_bundle(PbrBundle {
+                    mesh: wall_mesh.clone(),
+                    material: mat,
+                    transform,
+                    ..default()
+                })
+                .insert_bundle((
+                    Name::from(format!("Wall_{}", i)),
+                    RigidBody::Fixed,
+                    Collider::cuboid(half_len, height / 2., WALL_THICKNESS / 2.),
+                    CollisionGroups::new(WALLS_GROUP, ALL_GROUPS),
+                ));
         }
+        parent
+            .spawn_bundle(PbrBundle {
+                mesh: ground_mesh,
+                material: ground_material,
+                transform: Transform::from_translation(Vec3::Y * height),
+                ..default()
+            })
+            .insert_bundle((
+                Name::from("Ceiling"),
+                RigidBody::Fixed,
+                Collider::cuboid(half_len * 1.1, WALL_THICKNESS / 2., half_len * 1.1),
+                CollisionGroups::new(GROUND_GROUP, ALL_GROUPS),
+            ));
     });
 }

@@ -16,7 +16,7 @@ use bevy_rapier3d::prelude::*;
 use euclid::Angle;
 use leafwing_input_manager::prelude::*;
 
-use crate::plugins::{input::default_input_map, portal::PortalTeleport};
+use crate::plugins::{input::default_input_map, portal::PortalTeleport, physics::*};
 
 use super::input::Actions;
 
@@ -84,6 +84,7 @@ fn spawn_controller(
                 LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z,
                 Velocity::default(),
                 Name::from("Player"),
+                CollisionGroups::new(PLAYER_GROUP, ALL_GROUPS),
                 PortalTeleport
             ))
             .id();
@@ -101,7 +102,7 @@ fn spawn_controller(
                     fov: std::f32::consts::FRAC_PI_4,
                     // TODO: make the portal cameras use the main camera FOV so we can change this
                     aspect_ratio: 16. / 9.,
-                    near: 0.3,
+                    near: 0.1,
                     far: 1000.,
                 }),
                 ..default()

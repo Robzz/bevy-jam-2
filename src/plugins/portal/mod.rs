@@ -1,7 +1,15 @@
+//! This module defines portals that can be placed throughout the world to travel between linked
+//! portals, as well as render from one another's viewpoint.
+//!
+//! Portal conventions:
+//!
+//! * The portal origin is at the center of the portal volume.
+//! * The portal clipping plane defined as the portal *back*.
+
 use std::f32::consts::{FRAC_PI_4, PI};
 
 use bevy::{
-    math::Vec4Swizzles,
+    math::{Vec3Swizzles, Vec4Swizzles},
     prelude::*,
     reflect::FromReflect,
     render::{
@@ -13,9 +21,11 @@ use bevy::{
     },
     transform::TransformSystem,
 };
+use bevy_prototype_debug_lines::DebugLines;
 use bevy_rapier3d::prelude::*;
 
 mod camera_projection;
+mod geometry;
 mod material;
 
 use camera_projection::PortalCameraProjection;
@@ -32,84 +42,12 @@ pub struct PortalPlugin;
 // * Figure where to place the portal cameras
 //   * Same thing for recursive portal iterations
 
-#[derive(Debug, Default, Reflect)]
-struct PortalResources {
-    texture_a: Handle<Image>,
-    texture_b: Handle<Image>,
-    render_targets: [Handle<Image>; 2],
-    open_materials: [Handle<PortalMaterial>; 2],
-    mesh: Handle<Mesh>,
-    main_camera: Option<Entity>,
-    dbg_sphere_mesh: Handle<Mesh>,
-    dbg_material: Handle<StandardMaterial>,
-}
-
-#[derive(Debug, Default, Component, Reflect, FromReflect)]
-pub struct Portal<const N: u32> {
-    /// The camera which is used to render to the texture applied to this portal
-    /// This camera is positioned to look at the other portal from behind, with the same relative
-    /// position.
-    camera: Option<Entity>,
-    linked_portal: Option<Entity>,
-}
-
-#[derive(Debug, Default, Component, Reflect, FromReflect)]
-pub struct PortalCamera<const N: u32>;
-
-impl<const N: u32> Portal<N> {
-    pub const fn mouse_button() -> MouseButton {
-        match N {
-            0 => MouseButton::Left,
-            1 => MouseButton::Right,
-            _ => panic!("No such portal"),
-        }
-    }
-}
-
-#[derive(Debug, SystemLabel)]
-pub enum PortalLabels {
-    ShootPortals,
-    UpdateMainCamera,
-    CreateCameras,
-    SyncCameras,
-    TeleportEntities,
-}
-
-#[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
-#[reflect(Component)]
-pub struct PortalTeleport;
-
-#[derive(Bundle)]
-pub struct PortalBundle<const N: u32> {
-    #[bundle]
-    mesh_bundle: MaterialMeshBundle<PortalMaterial>,
-    render_layers: RenderLayers,
-    portal: Portal<N>,
-    collider: Collider,
-    active_events: ActiveEvents,
-    sensor: Sensor,
-    collision_groups: CollisionGroups,
-}
-
-impl<const N: u32> Default for PortalBundle<N> {
-    fn default() -> Self {
-        PortalBundle {
-            render_layers: RenderLayers::layer(1),
-            collider: Collider::cuboid(1., 1., 0.6),
-            sensor: Sensor,
-            active_events: ActiveEvents::COLLISION_EVENTS,
-            collision_groups: CollisionGroups::new(PORTAL_GROUP, PLAYER_GROUP | PROPS_GROUP),
-            mesh_bundle: MaterialMeshBundle::default(),
-            portal: Portal::default(),
-        }
-    }
-}
-
 impl Plugin for PortalPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(MaterialPlugin::<PortalMaterial>::default())
             .register_type::<Portal<0>>()
             .register_type::<Portal<1>>()
+            .register_type::<PortalOrientation>()
             .register_type::<PortalResources>()
             .register_type::<PortalMaterial>()
             .register_type::<PortalTeleport>()
@@ -144,7 +82,7 @@ impl Plugin for PortalPlugin {
             .add_system_set(
                 SystemSet::new()
                     .with_system(teleport_props)
-                    //.with_system(teleport_player)
+                    .with_system(teleport_player)
                     .label(PortalLabels::TeleportEntities)
                     .after(PortalLabels::SyncCameras),
             )
@@ -159,73 +97,211 @@ impl Plugin for PortalPlugin {
 impl PortalPlugin {
     fn spawn_portal<const N: u32>(
         commands: &mut Commands,
-        player_pos: &GlobalTransform,
+        player_transform: &GlobalTransform,
         portal_query: &Query<(&Portal<N>, Entity)>,
         other_portal_entity: Option<Entity>,
         rapier: &Res<RapierContext>,
         portal_res: &Res<PortalResources>,
     ) -> Option<Entity> {
-        if let Some(portal_pos) = PortalPlugin::portal_location(player_pos, rapier) {
-            info!("Spawning portal at {}", portal_pos.translation);
-            if let Ok((previous_portal, entity)) = portal_query.get_single() {
-                info!("Despawning previous portal");
-                if let Some(cam) = previous_portal.camera {
-                    commands.entity(cam).despawn_recursive();
-                }
-                commands.entity(entity).despawn_recursive();
-            }
-            Some(
-                commands
-                    .spawn_bundle(PortalBundle {
-                        mesh_bundle: MaterialMeshBundle {
-                            mesh: portal_res.mesh.clone(),
-                            material: portal_res.open_materials[N as usize].clone(),
-                            transform: portal_pos,
-                            ..default()
-                        },
-                        portal: Portal::<N> {
-                            linked_portal: other_portal_entity,
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .id(),
-            )
-        } else {
-            None
-        }
-    }
-
-    fn portal_location(
-        player_transform: &GlobalTransform,
-        rapier: &Res<RapierContext>,
-    ) -> Option<Transform> {
-        let (_entity, intersection) = rapier.cast_ray_and_get_normal(
+        let (_entity, impact) = rapier.cast_ray_and_get_normal(
             player_transform.translation(),
             player_transform.forward(),
             Real::MAX,
             true,
-            QueryFilter::only_fixed(),
+            QueryFilter::only_fixed().groups(InteractionGroups::new(
+                RAYCAST_GROUP,
+                WALLS_GROUP | GROUND_GROUP,
+            )),
         )?;
-        Some(Self::location_from_impact(intersection))
+
+        if let Ok((previous_portal, entity)) = portal_query.get_single() {
+            info!("Despawning previous portal");
+            if let Some(cam) = previous_portal.camera {
+                commands.entity(cam).despawn_recursive();
+            }
+            commands.entity(entity).despawn_recursive();
+        }
+        let portal = PortalBundle::<N>::from_ray_impact(
+            impact,
+            &player_transform,
+            &portal_res,
+            other_portal_entity,
+        );
+        info!(
+            "Spawning portal at {}",
+            &portal.mesh_bundle.transform.translation
+        );
+        Some(commands.spawn_bundle(portal).id())
     }
 
-    fn location_from_impact(impact: RayIntersection) -> Transform {
-        const Z_FIGHTING_OFFSET: f32 = 0.001;
-
-        let mut transform = Transform {
-            // We place the portal at the ray intersection point, plus a small offset
-            // along the surface normal to prevent Z fighting.
-            translation: impact.point + impact.normal * Z_FIGHTING_OFFSET,
-            ..default()
-        };
-        // Orient along the surface normal
-        // TODO: we assume a vertical portal position for now, try and figure out
-        // the math for correctly placing the portal later.
-        transform.look_at(impact.point - impact.normal, Vec3::Y);
-        transform
+    fn get_portal_plane(trf: &GlobalTransform) -> Vec4 {
+        let normal = trf.back();
+        let position = trf.translation() + (PORTAL_MESH_DEPTH) * normal;
+        Vec4::from((normal.xyz(), -normal.dot(position)))
     }
 }
+
+#[derive(Debug, Default, Reflect)]
+struct PortalResources {
+    texture_a: Handle<Image>,
+    texture_b: Handle<Image>,
+    render_targets: [Handle<Image>; 2],
+    open_materials: [Handle<PortalMaterial>; 2],
+    portal_mesh: Handle<Mesh>,
+    main_camera: Option<Entity>,
+    dbg_sphere_mesh: Handle<Mesh>,
+    dbg_material: Handle<StandardMaterial>,
+}
+
+#[derive(Debug, Default, Clone, Reflect)]
+/// Enumerates the different cases for portal orientation that we handle differently.
+pub enum PortalOrientation {
+    /// The portal is horizontal on the ground or ceiling.
+    Horizontal,
+    /// The portal is on a surface which is neither the ground nor ceiling.
+    #[default]
+    Other,
+}
+
+#[derive(Debug, Default, Component, Reflect)]
+#[reflect(Component)]
+pub struct Portal<const N: u32> {
+    /// The camera which is used to render to the texture applied to this portal
+    /// This camera is positioned to look at the other portal from behind, with the same relative
+    /// position.
+    camera: Option<Entity>,
+    linked_portal: Option<Entity>,
+    orientation: PortalOrientation,
+}
+
+impl<const N: u32> Portal<N> {
+    /// Return the mouse button associated to shooting this portal type.
+    pub const fn mouse_button() -> MouseButton {
+        match N {
+            0 => MouseButton::Left,
+            1 => MouseButton::Right,
+            _ => panic!("No such portal"),
+        }
+    }
+
+    /// Return the collision groups filter which turns off collisions with this portal's surface.
+    pub fn filter_collisions(&self) -> u32 {
+        match self.orientation {
+            PortalOrientation::Horizontal => PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | WALLS_GROUP,
+            PortalOrientation::Other => PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | GROUND_GROUP,
+        }
+    }
+
+    /// Return the collision groups filter which turns collisions with this portal's surface back on.
+    pub fn restore_collisions(&self) -> u32 {
+        ALL_GROUPS
+    }
+}
+
+#[derive(Debug, Default, Component, Reflect, FromReflect)]
+pub struct PortalCamera<const N: u32>;
+
+#[derive(Debug, SystemLabel)]
+pub enum PortalLabels {
+    ShootPortals,
+    UpdateMainCamera,
+    CreateCameras,
+    SyncCameras,
+    TeleportEntities,
+}
+
+#[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct PortalTeleport;
+
+#[derive(Bundle)]
+pub struct PortalBundle<const N: u32> {
+    #[bundle]
+    mesh_bundle: MaterialMeshBundle<PortalMaterial>,
+    render_layers: RenderLayers,
+    portal: Portal<N>,
+    collider: Collider,
+    active_events: ActiveEvents,
+    sensor: Sensor,
+    collision_groups: CollisionGroups,
+}
+
+impl<const N: u32> Default for PortalBundle<N> {
+    fn default() -> Self {
+        PortalBundle {
+            render_layers: RenderLayers::layer(1),
+            collider: Collider::cuboid(0.5, 0.5, PORTAL_MESH_DEPTH / 2.),
+            sensor: Sensor,
+            active_events: ActiveEvents::COLLISION_EVENTS,
+            collision_groups: CollisionGroups::new(PORTAL_GROUP, PLAYER_GROUP | PROPS_GROUP),
+            mesh_bundle: MaterialMeshBundle::default(),
+            portal: Portal::default(),
+        }
+    }
+}
+
+impl<const N: u32> PortalBundle<N> {
+    fn from_ray_impact(
+        impact: RayIntersection,
+        player_transform: &GlobalTransform,
+        portal_res: &Res<PortalResources>,
+        other_portal: Option<Entity>,
+    ) -> PortalBundle<N> {
+        const Z_FIGHTING_OFFSET: f32 = 0.001;
+        // We place the portal at the ray intersection point, plus a small offset
+        // along the surface normal to prevent Z fighting.
+        let mut portal_center = impact.point + impact.normal * Z_FIGHTING_OFFSET;
+        // Raycast towards the top, bottom, left and right to see if any geometry is in the way of
+        // the portal, and correct the portal position.
+
+        // Orient along the surface normal: we rotate the portal by the rotation between the object
+        // space normal and the world space impact normal.
+        let mut transform = Transform {
+            translation: portal_center,
+            ..default()
+        };
+        let (up, orientation) = if impact.normal.abs().abs_diff_eq(Vec3::Y, 0.001) {
+            // If the normal is close to vertical, align the up direction with the player forward
+            // direction.
+            let forward_to_normal = player_transform
+                .forward()
+                .project_onto_normalized(impact.normal);
+            (
+                (player_transform.forward() - forward_to_normal).normalize(),
+                PortalOrientation::Horizontal,
+            )
+        } else {
+            // If the normal is not vertical, we can figure out the portal "up" direction by
+            // projecting the Y vector onto the portal plane and normalizing the result.
+            let y_to_normal = Vec3::Y.project_onto_normalized(impact.normal);
+            (
+                (Vec3::Y - y_to_normal).normalize(),
+                PortalOrientation::Other,
+            )
+        };
+        transform.look_at(portal_center - impact.normal, up);
+
+        // Offset the portal so the clipping plane coincides with the surface.
+        let mut offset_portal = transform.with_scale(Vec3::splat(2.));
+        offset_portal.translation += offset_portal.forward() * PORTAL_MESH_DEPTH;
+        PortalBundle {
+            mesh_bundle: MaterialMeshBundle {
+                mesh: portal_res.portal_mesh.clone(),
+                material: portal_res.open_materials[N as usize].clone(),
+                transform: offset_portal,
+                ..default()
+            },
+            portal: Portal::<N> {
+                linked_portal: other_portal,
+                orientation,
+                ..default()
+            },
+            ..default()
+        }
+    }
+}
+
+const PORTAL_MESH_DEPTH: f32 = 0.5;
 
 /// Load the assets required to render the portals.
 fn load_portal_assets(
@@ -239,9 +315,14 @@ fn load_portal_assets(
     let tex_a = assets.load("textures/portal_a.png");
     let tex_b = assets.load("textures/portal_b.png");
     let portal_mesh = meshes.add(
-        shape::Quad {
-            size: Vec2::new(2., 2.),
-            flip: false,
+        shape::Box {
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+            // TODO: link to main camera near plane distance
+            min_z: -PORTAL_MESH_DEPTH / 2.,
+            max_z: PORTAL_MESH_DEPTH / 2.,
         }
         .into(),
     );
@@ -291,7 +372,7 @@ fn load_portal_assets(
         texture_b: tex_b,
         render_targets,
         open_materials,
-        mesh: portal_mesh,
+        portal_mesh,
         main_camera: None,
         dbg_sphere_mesh: dbg_mesh,
         dbg_material: dbg_mat,
@@ -337,9 +418,7 @@ fn fire_portal<const N: u32, const OTHER: u32>(
                 &mut commands,
                 player_pos,
                 &portal_query,
-                other_portal_query
-                    .get_single()
-                    .ok(),
+                other_portal_query.get_single().ok(),
                 &rapier,
                 &portal_res,
             );
@@ -378,6 +457,13 @@ fn create_portal_cameras<const N: u32>(
                         visibility: Visibility::visible(),
                         ..default()
                     })
+                    .with_children(|camera| {
+                        //camera.spawn_bundle(PbrBundle {
+                            //mesh: portal_res.dbg_sphere_mesh.clone(),
+                            //material: portal_res.dbg_material.clone(),
+                            //..default()
+                        //});
+                    })
                     .id(),
             );
         }
@@ -394,7 +480,7 @@ fn sync_portal_cameras(
         ),
     >,
     portal_query_a: Query<
-        &Transform,
+        &GlobalTransform,
         (
             With<Portal<0>>,
             Without<PortalCamera<0>>,
@@ -402,7 +488,7 @@ fn sync_portal_cameras(
         ),
     >,
     portal_query_b: Query<
-        &Transform,
+        &GlobalTransform,
         (
             With<Portal<1>>,
             Without<PortalCamera<0>>,
@@ -417,6 +503,7 @@ fn sync_portal_cameras(
         (&mut Transform, &mut PortalCameraProjection),
         (With<PortalCamera<1>>, Without<PortalCamera<0>>),
     >,
+    mut lines: ResMut<DebugLines>,
 ) {
     if let (
         Ok(trf_a),
@@ -435,22 +522,33 @@ fn sync_portal_cameras(
         // For this, we express the transformation between the main camera and portal A, then
         // apply it between the virtual camera and portal B.
         let trf_main_cam = trf_main_cam.compute_transform();
-        let rot = Transform::from_rotation(Quat::from_rotation_y(PI));
-        *cam_a_trf = (*trf_b * rot * Transform::from_matrix(trf_a.compute_matrix().inverse()))
+        let clip_to_a = Transform::from_translation(trf_a.forward() * PORTAL_MESH_DEPTH);
+        let clip_to_b = Transform::from_translation(trf_b.forward() * PORTAL_MESH_DEPTH);
+        let a_to_clip = Transform::from_translation(-trf_a.forward() * PORTAL_MESH_DEPTH);
+        let b_to_clip = Transform::from_translation(-trf_b.forward() * PORTAL_MESH_DEPTH);
+        // Rotation between A forward and B backwards
+        let rot_a = Transform::from_rotation(Quat::from_axis_angle(trf_a.up(), PI));
+        let rot_b = Transform::from_rotation(Quat::from_axis_angle(trf_b.up(), PI));
+        *cam_a_trf = trf_b.compute_transform()
+            * rot_a
+            * Transform::from_matrix(trf_a.compute_matrix().inverse())
             * trf_main_cam;
-        *cam_b_trf = (*trf_a * rot * Transform::from_matrix(trf_b.compute_matrix().inverse()))
+        *cam_b_trf = trf_a.compute_transform()
+            * rot_b
+            * Transform::from_matrix(trf_b.compute_matrix().inverse())
             * trf_main_cam;
+        // The previous transforms align the portals but flip the clipping planes, so we must
+        // translate by the mesh depth towards the back
+        cam_a_trf.translation += trf_b.back();
+        cam_b_trf.translation += trf_a.back();
 
         // Compute the clipping planes for both cameras.
         // The plane normals are the rotated forward() direction of the portal transforms, and their origin
         // is on the plane, which is enough to compute the plane homogeneous coords. They must be
         // transformed to the camera reference frame afterwards.
-        let portal_a_normal = rot.rotation.mul_vec3(trf_a.forward());
-        let portal_b_normal = rot.rotation.mul_vec3(trf_b.forward());
-        let cam_a_clip_plane =
-            Vec4::from((portal_b_normal, -portal_b_normal.dot(trf_b.translation)));
-        let cam_b_clip_plane =
-            Vec4::from((portal_a_normal, -portal_a_normal.dot(trf_a.translation)));
+        let cam_a_clip_plane = PortalPlugin::get_portal_plane(trf_b);
+        let cam_b_clip_plane = PortalPlugin::get_portal_plane(trf_a);
+
         // Inverse transpose of the view matrix = inverse inverse transpose of camera matrix = transpose
         proj_a.near = cam_a_trf.compute_matrix().transpose() * cam_a_clip_plane;
         proj_b.near = cam_b_trf.compute_matrix().transpose() * cam_b_clip_plane;
@@ -458,50 +556,44 @@ fn sync_portal_cameras(
         proj_a.near *= d;
         let d = proj_b.near.xyz().length_recip();
         proj_b.near *= d;
+
+        #[cfg(feature = "devel")]
+        super::debug::draw::draw_camera_frustum_infinite_reverse(&cam_a_trf, &proj_a, &mut lines);
     }
 }
 
 fn turn_off_collisions_with_static_geo_when_in_portal(
     mut collisions: EventReader<CollisionEvent>,
-    portal_a_query: Query<Entity, (With<Portal<0>>, Without<PortalTeleport>)>,
-    portal_b_query: Query<Entity, (With<Portal<1>>, Without<PortalTeleport>)>,
+    portal_a_query: Query<(Entity, &Portal<0>), Without<PortalTeleport>>,
+    portal_b_query: Query<(Entity, &Portal<1>), Without<PortalTeleport>>,
     mut teleportable_query: Query<&mut CollisionGroups, With<PortalTeleport>>,
 ) {
-    if let (Ok(portal_a), Ok(portal_b)) = (portal_a_query.get_single(), portal_b_query.get_single())
+    if let (Ok((portal_a_entity, portal_a)), Ok((portal_b_entity, portal_b))) =
+        (portal_a_query.get_single(), portal_b_query.get_single())
     {
         for collision in collisions.iter() {
             match collision {
                 CollisionEvent::Started(collider_a, collider_b, _flags) => {
-                    info!(
-                        "Collision started between {:?} and {:?}",
-                        collider_a, collider_b
-                    );
-                    if collider_a == &portal_a || collider_a == &portal_b {
-                        if let Ok(mut groups) = teleportable_query.get_mut(*collider_b) {
-                            info!("Teleportable object in portal sensor zone");
-                            groups.filters = PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP;
+                    if collider_a == &portal_a_entity || collider_b == &portal_a_entity {
+                        let maybe_teleportable = if collider_a == &portal_a_entity { collider_b } else { collider_a };
+                        if let Ok(mut groups) = teleportable_query.get_mut(*maybe_teleportable) {
+                            groups.filters = portal_a.filter_collisions();
                         }
-                    } else if collider_b == &portal_a || collider_b == &portal_b {
-                        if let Ok(mut groups) = teleportable_query.get_mut(*collider_a) {
-                            info!("Teleportable object in portal sensor zone");
-                            groups.filters = PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP;
+                    } else if collider_a == &portal_b_entity || collider_b == &portal_b_entity {
+                        let maybe_teleportable = if collider_a == &portal_b_entity { collider_b } else { collider_a };
+                        if let Ok(mut groups) = teleportable_query.get_mut(*maybe_teleportable) {
+                            groups.filters = portal_b.filter_collisions();
                         }
                     }
                 }
                 CollisionEvent::Stopped(collider_a, collider_b, _flags) => {
-                    info!(
-                        "Collision stopped between {:?} and {:?}",
-                        collider_a, collider_b
-                    );
-                    if collider_a == &portal_a || collider_a == &portal_b {
+                    if collider_a == &portal_a_entity || collider_b == &portal_a_entity {
                         if let Ok(mut groups) = teleportable_query.get_mut(*collider_b) {
-                            info!("Teleportable object out of portal sensor zone");
-                            groups.filters = ALL_GROUPS;
+                            groups.filters = portal_a.restore_collisions();
                         }
-                    } else if collider_b == &portal_a || collider_b == &portal_b {
+                    } else if collider_a == &portal_b_entity || collider_b == &portal_b_entity {
                         if let Ok(mut groups) = teleportable_query.get_mut(*collider_a) {
-                            info!("Teleportable object out of portal sensor zone");
-                            groups.filters = ALL_GROUPS;
+                            groups.filters = portal_b.restore_collisions();
                         }
                     }
                 }
@@ -519,25 +611,35 @@ fn teleport_props(
     if let (Ok((portal_a_trf, _portal_a)), Ok((portal_b_trf, _portal_b))) =
         (portal_a_query.get_single(), portal_b_query.get_single())
     {
-        let flip = Mat4::from_rotation_y(PI);
-        let a_to_b = Transform::from_matrix(
-            portal_b_trf.compute_matrix() * flip * portal_a_trf.compute_matrix().inverse(),
-        );
-        let b_to_a = Transform::from_matrix(
-            portal_a_trf.compute_matrix() * flip * portal_b_trf.compute_matrix().inverse(),
-        );
+        let flip = Transform::from_rotation(Quat::from_rotation_y(PI));
+        let clip_to_a = Transform::from_translation(portal_a_trf.forward() * PORTAL_MESH_DEPTH);
+        let clip_to_b = Transform::from_translation(portal_b_trf.forward() * PORTAL_MESH_DEPTH);
+        let a_to_clip = Transform::from_translation(-portal_a_trf.forward() * PORTAL_MESH_DEPTH);
+        let b_to_clip = Transform::from_translation(-portal_b_trf.forward() * PORTAL_MESH_DEPTH);
+        let a_to_b = b_to_clip
+            * *portal_b_trf
+            * flip
+            * Transform::from_matrix(portal_a_trf.compute_matrix().inverse())
+            * clip_to_a;
+        let b_to_a = a_to_clip
+            * *portal_a_trf
+            * flip
+            * Transform::from_matrix(portal_b_trf.compute_matrix().inverse())
+            * clip_to_b;
         for (mut obj_transform, mut velocity) in &mut teleportables {
-            let a_to_object = obj_transform.translation - portal_a_trf.translation;
-            let b_to_object = obj_transform.translation - portal_b_trf.translation;
-            if a_to_object.length() < PROXIMITY_THRESHOLD {
-                if a_to_object.dot(portal_a_trf.forward()) > 0. {
+            let a_clip_to_object = obj_transform.translation - portal_a_trf.translation
+                + portal_a_trf.forward() * PORTAL_MESH_DEPTH;
+            let b_clip_to_object = obj_transform.translation - portal_b_trf.translation
+                + portal_b_trf.forward() * PORTAL_MESH_DEPTH;
+            if a_clip_to_object.length() < PROXIMITY_THRESHOLD {
+                if a_clip_to_object.dot(portal_a_trf.forward()) > 0. {
                     info!("Teleporting object from portal A to portal B");
                     *obj_transform = a_to_b.mul_transform(*obj_transform);
                     velocity.linvel = a_to_b.rotation.mul_vec3(velocity.linvel);
                     velocity.angvel = a_to_b.rotation.mul_vec3(velocity.angvel);
                 }
-            } else if b_to_object.length() < PROXIMITY_THRESHOLD
-                && b_to_object.dot(portal_b_trf.forward()) > 0.
+            } else if b_clip_to_object.length() < PROXIMITY_THRESHOLD
+                && b_clip_to_object.dot(portal_b_trf.forward()) > 0.
             {
                 info!("Teleporting object from portal B to portal A");
                 *obj_transform = b_to_a.mul_transform(*obj_transform);
@@ -548,40 +650,56 @@ fn teleport_props(
     }
 }
 
-//fn teleport_player(
-//portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
-//portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
-//mut player: Query<(&mut Transform, &mut Velocity), (With<FirstPersonController>, With<PortalTeleport>)>,
-//) {
-//// Player origin is on the ground, so offset the detection distance a bit
-//const PLAYER_PROXIMITY_THRESHOLD: f32 = 2.3;
-//if let (Ok((portal_a_trf, _portal_a)), Ok((portal_b_trf, _portal_b))) =
-//(portal_a_query.get_single(), portal_b_query.get_single())
-//{
-//let flip = Mat4::from_rotation_y(PI);
-//let a_to_b = Transform::from_matrix(portal_b_trf.compute_matrix() * flip * portal_a_trf.compute_matrix().inverse());
-//let b_to_a = Transform::from_matrix(portal_a_trf.compute_matrix() * flip * portal_b_trf.compute_matrix().inverse());
-//if let (Ok((mut player_transform, mut velocity)), Ok(mut render_transform)) = (logical_player.get_single_mut(), render_player.get_single_mut()) {
-//let a_to_player = player_transform.translation - portal_a_trf.translation;
-//let b_to_player = player_transform.translation - portal_b_trf.translation;
-//if a_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
-//if a_to_player.dot(portal_a_trf.forward()) > 0. {
-//info!("Teleporting player from portal A to portal B");
-//*player_transform = a_to_b.mul_transform(*player_transform);
-//*render_transform = a_to_b.mul_transform(*render_transform);
-//velocity.linvel = a_to_b.rotation.mul_vec3(velocity.linvel);
-//velocity.angvel = a_to_b.rotation.mul_vec3(velocity.angvel);
-//}
-//}
-//else if b_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
-//if b_to_player.dot(portal_b_trf.forward()) > 0. {
-//info!("Teleporting player from portal B to portal A");
-//*player_transform = b_to_a.mul_transform(*player_transform);
-//*render_transform = b_to_a.mul_transform(*render_transform);
-//velocity.linvel = b_to_a.rotation.mul_vec3(velocity.linvel);
-//velocity.angvel = b_to_a.rotation.mul_vec3(velocity.angvel);
-//}
-//}
-//}
-//}
-//}
+fn teleport_player(
+    portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
+    portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
+    mut player: Query<
+        (&mut Transform, &mut Velocity),
+        (With<FirstPersonController>, With<PortalTeleport>),
+    >,
+) {
+    // Player origin is on the ground, so offset the detection distance a bit
+    const PLAYER_PROXIMITY_THRESHOLD: f32 = 2.3;
+    if let (Ok((portal_a_trf, _portal_a)), Ok((portal_b_trf, _portal_b))) =
+        (portal_a_query.get_single(), portal_b_query.get_single())
+    {
+        if let Ok((mut player_transform, mut velocity)) = player.get_single_mut() {
+            let flip = Transform::from_rotation(Quat::from_rotation_y(PI));
+            let clip_to_a = Transform::from_translation(portal_a_trf.forward() * PORTAL_MESH_DEPTH);
+            let clip_to_b = Transform::from_translation(portal_b_trf.forward() * PORTAL_MESH_DEPTH);
+            let a_to_clip =
+                Transform::from_translation(-portal_a_trf.forward() * PORTAL_MESH_DEPTH);
+            let b_to_clip =
+                Transform::from_translation(-portal_b_trf.forward() * PORTAL_MESH_DEPTH);
+            let a_to_b = b_to_clip
+                * *portal_b_trf
+                * flip
+                * Transform::from_matrix(portal_a_trf.compute_matrix().inverse())
+                * clip_to_a;
+            let b_to_a = a_to_clip
+                * *portal_a_trf
+                * flip
+                * Transform::from_matrix(portal_b_trf.compute_matrix().inverse())
+                * clip_to_b;
+            let a_clip_to_player = player_transform.translation - portal_a_trf.translation
+                + portal_a_trf.forward() * PORTAL_MESH_DEPTH;
+            let b_clip_to_player = player_transform.translation - portal_b_trf.translation
+                + portal_b_trf.forward() * PORTAL_MESH_DEPTH;
+            if a_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
+                if a_clip_to_player.dot(portal_a_trf.forward()) > 0. {
+                    info!("Teleporting player from portal A to portal B");
+                    *player_transform = a_to_b.mul_transform(*player_transform);
+                    velocity.linvel = a_to_b.rotation.mul_vec3(velocity.linvel);
+                    velocity.angvel = a_to_b.rotation.mul_vec3(velocity.angvel);
+                }
+            } else if b_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
+                if b_clip_to_player.dot(portal_b_trf.forward()) > 0. {
+                    info!("Teleporting player from portal B to portal A");
+                    *player_transform = b_to_a.mul_transform(*player_transform);
+                    velocity.linvel = b_to_a.rotation.mul_vec3(velocity.linvel);
+                    velocity.angvel = b_to_a.rotation.mul_vec3(velocity.angvel);
+                }
+            }
+        }
+    }
+}
