@@ -6,7 +6,10 @@
 //! * The portal origin is at the center of the portal volume.
 //! * The portal clipping plane defined as the portal *back*.
 
-use std::f32::consts::{FRAC_PI_4, PI};
+use std::{
+    f32::consts::{FRAC_PI_4, PI},
+    time::Duration,
+};
 
 use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
@@ -29,6 +32,7 @@ mod geometry;
 mod material;
 
 use camera_projection::PortalCameraProjection;
+use euclid::Angle;
 use material::PortalMaterial;
 
 use super::{first_person_controller::*, physics::*};
@@ -85,6 +89,11 @@ impl Plugin for PortalPlugin {
                     .with_system(teleport_player)
                     .label(PortalLabels::TeleportEntities)
                     .after(PortalLabels::SyncCameras),
+            )
+            .add_system(
+                animate_camera_roll
+                    .label(PortalLabels::AnimateCamera)
+                    .after(PortalLabels::TeleportEntities),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -187,7 +196,9 @@ impl<const N: u32> Portal<N> {
     /// Return the collision groups filter which turns off collisions with this portal's surface.
     pub fn filter_collisions(&self) -> u32 {
         match self.orientation {
-            PortalOrientation::Horizontal => PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | WALLS_GROUP,
+            PortalOrientation::Horizontal => {
+                PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | WALLS_GROUP
+            }
             PortalOrientation::Other => PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | GROUND_GROUP,
         }
     }
@@ -208,11 +219,32 @@ pub enum PortalLabels {
     CreateCameras,
     SyncCameras,
     TeleportEntities,
+    AnimateCamera,
 }
 
 #[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
 #[reflect(Component)]
 pub struct PortalTeleport;
+
+#[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct AnimateRoll {
+    end: Quat,
+    start: Quat,
+    duration: Duration,
+    remaining: Duration,
+}
+
+impl AnimateRoll {
+    pub fn new(start: Quat, rotation: Quat, duration: Duration) -> AnimateRoll {
+        AnimateRoll {
+            end: rotation * start,
+            duration,
+            remaining: duration,
+            start,
+        }
+    }
+}
 
 #[derive(Bundle)]
 pub struct PortalBundle<const N: u32> {
@@ -458,11 +490,11 @@ fn create_portal_cameras<const N: u32>(
                         ..default()
                     })
                     .with_children(|camera| {
-                        //camera.spawn_bundle(PbrBundle {
-                            //mesh: portal_res.dbg_sphere_mesh.clone(),
-                            //material: portal_res.dbg_material.clone(),
-                            //..default()
-                        //});
+                        camera.spawn_bundle(PbrBundle {
+                            mesh: portal_res.dbg_sphere_mesh.clone(),
+                            material: portal_res.dbg_material.clone(),
+                            ..default()
+                        });
                     })
                     .id(),
             );
@@ -474,7 +506,7 @@ fn sync_portal_cameras(
     main_camera_query: Query<
         &GlobalTransform,
         (
-            With<FirstPersonCamera>,
+            With<CameraAnchor>,
             Without<PortalCamera<0>>,
             Without<PortalCamera<1>>,
         ),
@@ -527,8 +559,12 @@ fn sync_portal_cameras(
         let a_to_clip = Transform::from_translation(-trf_a.forward() * PORTAL_MESH_DEPTH);
         let b_to_clip = Transform::from_translation(-trf_b.forward() * PORTAL_MESH_DEPTH);
         // Rotation between A forward and B backwards
-        let rot_a = Transform::from_rotation(Quat::from_axis_angle(trf_a.up(), PI));
-        let rot_b = Transform::from_rotation(Quat::from_axis_angle(trf_b.up(), PI));
+        //let rot_a = Quat::from_rotation_arc(trf_a.forward(), trf_b.back());
+        //let rot_b = rot_a.conjugate();
+        //let rot_a = Transform::from_rotation(Quat::from_axis_angle(trf_a.up(), PI));
+        //let rot_b = Transform::from_rotation(Quat::from_axis_angle(trf_b.up(), PI));
+        let rot_a = Transform::from_rotation(Quat::from_rotation_y(PI));
+        let rot_b = Transform::from_rotation(Quat::from_rotation_y(PI));
         *cam_a_trf = trf_b.compute_transform()
             * rot_a
             * Transform::from_matrix(trf_a.compute_matrix().inverse())
@@ -559,6 +595,7 @@ fn sync_portal_cameras(
 
         #[cfg(feature = "devel")]
         super::debug::draw::draw_camera_frustum_infinite_reverse(&cam_a_trf, &proj_a, &mut lines);
+        super::debug::draw::draw_camera_frustum_infinite_reverse(&cam_b_trf, &proj_b, &mut lines);
     }
 }
 
@@ -575,12 +612,20 @@ fn turn_off_collisions_with_static_geo_when_in_portal(
             match collision {
                 CollisionEvent::Started(collider_a, collider_b, _flags) => {
                     if collider_a == &portal_a_entity || collider_b == &portal_a_entity {
-                        let maybe_teleportable = if collider_a == &portal_a_entity { collider_b } else { collider_a };
+                        let maybe_teleportable = if collider_a == &portal_a_entity {
+                            collider_b
+                        } else {
+                            collider_a
+                        };
                         if let Ok(mut groups) = teleportable_query.get_mut(*maybe_teleportable) {
                             groups.filters = portal_a.filter_collisions();
                         }
                     } else if collider_a == &portal_b_entity || collider_b == &portal_b_entity {
-                        let maybe_teleportable = if collider_a == &portal_b_entity { collider_b } else { collider_a };
+                        let maybe_teleportable = if collider_a == &portal_b_entity {
+                            collider_b
+                        } else {
+                            collider_a
+                        };
                         if let Ok(mut groups) = teleportable_query.get_mut(*maybe_teleportable) {
                             groups.filters = portal_b.filter_collisions();
                         }
@@ -605,7 +650,10 @@ fn turn_off_collisions_with_static_geo_when_in_portal(
 fn teleport_props(
     portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
     portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
-    mut teleportables: Query<(&mut Transform, &mut Velocity), With<PortalTeleport>>,
+    mut teleportables: Query<
+        (&mut Transform, &mut Velocity),
+        (With<PortalTeleport>, Without<FirstPersonController>),
+    >,
 ) {
     const PROXIMITY_THRESHOLD: f32 = 1.0;
     if let (Ok((portal_a_trf, _portal_a)), Ok((portal_b_trf, _portal_b))) =
@@ -651,11 +699,21 @@ fn teleport_props(
 }
 
 fn teleport_player(
+    mut commands: Commands,
     portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
     portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
     mut player: Query<
-        (&mut Transform, &mut Velocity),
-        (With<FirstPersonController>, With<PortalTeleport>),
+        (&mut Transform, &mut Velocity, &mut FirstPersonController),
+        With<PortalTeleport>,
+    >,
+    mut camera_query: Query<
+        (&mut Transform, Entity),
+        (
+            With<CameraAnchor>,
+            Without<Portal<0>>,
+            Without<Portal<1>>,
+            Without<PortalTeleport>,
+        ),
     >,
 ) {
     // Player origin is on the ground, so offset the detection distance a bit
@@ -663,7 +721,11 @@ fn teleport_player(
     if let (Ok((portal_a_trf, _portal_a)), Ok((portal_b_trf, _portal_b))) =
         (portal_a_query.get_single(), portal_b_query.get_single())
     {
-        if let Ok((mut player_transform, mut velocity)) = player.get_single_mut() {
+        if let (
+            Ok((mut player_transform, mut velocity, mut player_controller)),
+            Ok((mut camera_transform, camera_entity)),
+        ) = (player.get_single_mut(), camera_query.get_single_mut())
+        {
             let flip = Transform::from_rotation(Quat::from_rotation_y(PI));
             let clip_to_a = Transform::from_translation(portal_a_trf.forward() * PORTAL_MESH_DEPTH);
             let clip_to_b = Transform::from_translation(portal_b_trf.forward() * PORTAL_MESH_DEPTH);
@@ -681,6 +743,16 @@ fn teleport_player(
                 * flip
                 * Transform::from_matrix(portal_b_trf.compute_matrix().inverse())
                 * clip_to_b;
+            // Player teleportation is handled differently from objects :
+            // * We keep the player capsule collider vertical at all times
+            // * We transform the player position normally, but the camera orientation requires some
+            //   special care
+            //   * To make the transition as seamless as possible, we orient the player at the
+            //     exit so that the camera points at the same spot the player was looking at
+            //     through the portal.
+            //   * If such a transform is impossible while keeping the player upright, then we
+            //     introduce a short animation bringing the camera back in line with the physical
+            //     model.
             let a_clip_to_player = player_transform.translation - portal_a_trf.translation
                 + portal_a_trf.forward() * PORTAL_MESH_DEPTH;
             let b_clip_to_player = player_transform.translation - portal_b_trf.translation
@@ -688,18 +760,109 @@ fn teleport_player(
             if a_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
                 if a_clip_to_player.dot(portal_a_trf.forward()) > 0. {
                     info!("Teleporting player from portal A to portal B");
-                    *player_transform = a_to_b.mul_transform(*player_transform);
-                    velocity.linvel = a_to_b.rotation.mul_vec3(velocity.linvel);
-                    velocity.angvel = a_to_b.rotation.mul_vec3(velocity.angvel);
+                    // Determine the relative rotation between the portal axis and the camera look vector.
+                    let portal_to_eye =
+                        Quat::from_rotation_arc(portal_a_trf.forward(), player_transform.forward());
+                    let player_pos = a_to_b.mul_vec3(player_transform.translation);
+                    let new_look_vector = portal_to_eye * portal_b_trf.back();
+                    // The FPS controller kinda sucks and applies yaw/pitch to different nodes (I'm
+                    // sure that felt smart at the time though). So we gotta decompose this new
+                    // look vector, apply the yaw to the root player node, and the pitch to the camera.
+                    let default_look_to_new = Quat::from_rotation_arc(Vec3::NEG_Z, new_look_vector);
+                    let (yaw, pitch, roll) = default_look_to_new.to_euler(EulerRot::YXZ);
+                    *player_transform = Transform::from_translation(player_pos);
+                    player_transform.rotation = Quat::from_rotation_y(yaw);
+                    player_controller.yaw = Angle::radians(yaw);
+                    player_controller.pitch = Angle::radians(pitch);
+
+                    if roll.abs() < PI / 180. {
+                        camera_transform.rotation = Quat::from_euler(EulerRot::YXZ, 0., pitch, 0.);
+                    } else {
+                        camera_transform.rotation =
+                            Quat::from_euler(EulerRot::YXZ, 0., pitch, roll);
+                        // Insert an animation to bring the roll back to 0.
+                        let final_cam_orientation = Quat::from_euler(EulerRot::YXZ, 0., pitch, 0.);
+                        commands
+                            .entity(camera_entity)
+                            .insert(AnimateRoll::new(
+                                camera_transform.rotation,
+                                final_cam_orientation,
+                                Duration::from_millis(500),
+                            ))
+                            .insert(CameraLock);
+                    }
+
+                    let transformed_velocity = a_to_b.rotation.mul_vec3(velocity.linvel);
+                    velocity.linvel = portal_b_trf.back() * transformed_velocity.length();
+                    //velocity.angvel.y = a_to_b.rotation.mul_vec3(velocity.angvel);
+                    //velocity.angvel.x = 0.;
+                    //velocity.angvel.z = 0.;
                 }
             } else if b_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
                 if b_clip_to_player.dot(portal_b_trf.forward()) > 0. {
                     info!("Teleporting player from portal B to portal A");
-                    *player_transform = b_to_a.mul_transform(*player_transform);
-                    velocity.linvel = b_to_a.rotation.mul_vec3(velocity.linvel);
-                    velocity.angvel = b_to_a.rotation.mul_vec3(velocity.angvel);
+                    //*player_transform = b_to_a.mul_transform(*player_transform);
+                    let portal_to_eye =
+                        Quat::from_rotation_arc(portal_b_trf.forward(), player_transform.forward());
+                    let player_pos = b_to_a.mul_vec3(player_transform.translation);
+                    let new_look_vector = portal_to_eye * portal_a_trf.back();
+                    let default_look_to_new = Quat::from_rotation_arc(Vec3::NEG_Z, new_look_vector);
+                    let (yaw, pitch, roll) = default_look_to_new.to_euler(EulerRot::YXZ);
+                    *player_transform = Transform::from_translation(player_pos);
+                    player_transform.rotation = Quat::from_rotation_y(yaw);
+                    player_controller.yaw = Angle::radians(yaw);
+                    player_controller.pitch = Angle::radians(pitch);
+
+                    //if roll.abs() < PI / 180. {
+                        camera_transform.rotation = Quat::from_euler(EulerRot::YXZ, 0., pitch, 0.);
+                    //} else {
+                        //camera_transform.rotation =
+                            //Quat::from_euler(EulerRot::YXZ, 0., pitch, roll);
+                        //// Insert an animation to bring the roll back to 0.
+                        //let final_cam_orientation = Quat::from_euler(EulerRot::YXZ, 0., pitch, 0.);
+                        //commands
+                            //.entity(camera_entity)
+                            //.insert(AnimateRoll::new(
+                                //camera_transform.rotation,
+                                //final_cam_orientation,
+                                //Duration::from_millis(500),
+                            //))
+                            //.insert(CameraLock);
+                    //}
+
+                    let transformed_velocity = b_to_a.rotation.mul_vec3(velocity.linvel);
+                    velocity.linvel = portal_a_trf.back() * transformed_velocity.length();
+                    //velocity.angvel = b_to_a.rotation.mul_vec3(velocity.angvel);
+                    //velocity.angvel.x = 0.;
+                    //velocity.angvel.z = 0.;
                 }
             }
+        }
+    }
+}
+
+fn animate_camera_roll(
+    mut commands: Commands,
+    mut camera_query: Query<(&mut Transform, &mut AnimateRoll, Entity), With<CameraAnchor>>,
+    time: Res<Time>,
+) {
+    for (mut transform, mut animation, entity) in &mut camera_query {
+        if time.delta() > animation.remaining {
+            // Apply the full remaining transformation
+            transform.rotation = animation.end;
+            commands
+                .entity(entity)
+                .remove::<AnimateRoll>()
+                .remove::<CameraLock>();
+            info!("Roll animation completed");
+        } else {
+            let elapsed_total = animation.duration - animation.remaining + time.delta();
+            let s = elapsed_total.as_secs_f32() / animation.duration.as_secs_f32();
+            let new_applied = animation
+                .end
+                .slerp(animation.start.conjugate() * transform.rotation, s);
+            transform.rotation = animation.start.slerp(animation.end, s);
+            animation.remaining -= time.delta();
         }
     }
 }

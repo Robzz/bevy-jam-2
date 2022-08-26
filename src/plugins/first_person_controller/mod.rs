@@ -42,8 +42,8 @@ pub enum FirstPersonLabels {
 #[derive(Debug, Component)]
 /// First person controller component.
 pub struct FirstPersonController {
-    pub theta: Angle<f32>,
-    pub phi: Angle<f32>,
+    pub yaw: Angle<f32>,
+    pub pitch: Angle<f32>,
     pub camera_anchor: Entity
 }
 
@@ -63,6 +63,16 @@ pub struct FirstPersonControllerBundle {
     pub spawner: FirstPersonControllerSpawner,
 }
 
+#[derive(Debug, Component, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct CameraAnchor;
+
+#[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+/// Component that can be placed on the first player controller and/or camera to lock their
+/// respective rotational degree of freedom.
+pub struct CameraLock;
+
 fn spawn_controller(
     mut commands: Commands,
     spawners_query: Query<(&FirstPersonControllerSpawner, Entity)>,
@@ -80,7 +90,9 @@ fn spawn_controller(
             })
             .insert_bundle((
                 RigidBody::Dynamic,
+                Ccd::enabled(),
                 Collider::capsule_y(PLAYER_HEIGHT / 2., 0.4),
+                ColliderMassProperties::MassProperties(MassProperties { local_center_of_mass: Vec3::ZERO, mass: 80., ..default() }),
                 LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z,
                 Velocity::default(),
                 Name::from("Player"),
@@ -93,7 +105,7 @@ fn spawn_controller(
             .spawn_bundle(SpatialBundle::from(Transform::from_translation(
                 CAMERA_OFFSET,
             )))
-            .insert(Name::from("Camera anchor"))
+            .insert_bundle((Name::from("Camera anchor"), CameraAnchor))
             .id();
 
         let camera = commands
@@ -116,8 +128,8 @@ fn spawn_controller(
             .entity(player_root)
             .add_child(camera_anchor)
             .insert(FirstPersonController {
-                theta: Angle::zero(),
-                phi: Angle::zero(),
+                yaw: Angle::zero(),
+                pitch: Angle::zero(),
                 camera_anchor,
             });
 
@@ -136,11 +148,12 @@ fn process_controller_inputs(
         &mut FirstPersonController,
         &mut Velocity,
         &Transform,
+        Option<&CameraLock>
     )>,
-    mut camera_query: Query<&mut Transform, Without<FirstPersonController>>,
+    mut camera_query: Query<&mut Transform, (Without<FirstPersonController>, Without<CameraLock>)>,
 ) {
-    for (input_state, mut controller, mut velocity, transform) in &mut player_query {
-        let mut new_velocities = Vec3::ZERO;
+    for (input_state, mut controller, mut velocity, transform, yaw_lock) in &mut player_query {
+        let mut new_velocities = Vec3::new(0., velocity.linvel.y, 0.);
 
         // Process movement on the forward axis
         let forward = transform.forward();
@@ -182,6 +195,11 @@ fn process_controller_inputs(
             _ => {}
         }
 
+        const JUMP_SPEED: f32 = 6.0;
+        if input_state.just_pressed(Actions::Jump) {
+            new_velocities.y = JUMP_SPEED;
+        }
+
         velocity.linvel = new_velocities;
 
         // Process mouse movement. We handle the rotation components separately:
@@ -191,15 +209,17 @@ fn process_controller_inputs(
         //   the perspective camera in order to keep the vertical orientation neutral on the root
         //   node.
         if let Some(mouse_movement) = input_state.axis_pair(Actions::Aim) {
-            controller.theta += Angle::radians(mouse_movement.x()) * MOUSE_SENSITIVITY;
-            controller.phi += Angle::radians(mouse_movement.y() * MOUSE_SENSITIVITY);
-            controller.phi.radians = controller
-                .phi
+            controller.yaw += Angle::radians(mouse_movement.x()) * MOUSE_SENSITIVITY;
+            controller.pitch += Angle::radians(mouse_movement.y() * MOUSE_SENSITIVITY);
+            controller.pitch.radians = controller
+                .pitch
                 .radians
                 .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
 
-            let v_rotation = Quat::from_axis_angle(Vec3::X, -controller.phi.radians);
-            velocity.angvel.y = mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
+            let v_rotation = Quat::from_axis_angle(Vec3::X, -controller.pitch.radians);
+            if yaw_lock.is_none() {
+                velocity.angvel.y = mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
+            }
 
             if let Ok(mut camera_transform) = camera_query.get_mut(controller.camera_anchor) {
                 camera_transform.rotation = v_rotation;

@@ -25,6 +25,7 @@ pub enum Actions {
     ShootA,
     ShootB,
     ShootCube,
+    Jump
 }
 
 pub fn default_input_map() -> InputMap<Actions> {
@@ -35,6 +36,7 @@ pub fn default_input_map() -> InputMap<Actions> {
         (KeyCode::D, Actions::StrafeRight),
         (KeyCode::F, Actions::ShootCube),
         (KeyCode::LShift, Actions::Sprint),
+        (KeyCode::Space, Actions::Jump),
     ]);
     input_map.insert(DualAxis::mouse_motion(), Actions::Aim);
     input_map.insert(MouseButton::Left, Actions::ShootA);
