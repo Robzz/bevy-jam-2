@@ -3,7 +3,6 @@
 //! TODO features:
 //!
 //! * Additional controls:
-//!   * Jumping
 //!   * Crouching
 //! * Climbing slopes and stairs
 
@@ -79,7 +78,7 @@ fn spawn_controller(
 ) {
     for (_spawner, id) in &spawners_query {
         const PLAYER_HEIGHT: f32 = 1.8;
-        const EYE_HEIGHT: f32 = 1.25;
+        const EYE_HEIGHT: f32 = 0.6;
         const CAMERA_OFFSET: Vec3 = Vec3::new(0., EYE_HEIGHT - PLAYER_HEIGHT / 2., 0.);
 
         let player_root = commands
