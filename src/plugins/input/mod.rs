@@ -1,16 +1,14 @@
 use bevy::prelude::*;
-use leafwing_input_manager::{Actionlike, prelude::*};
+use leafwing_input_manager::{prelude::*, Actionlike};
 
 #[derive(Debug)]
 pub struct InputPlugin;
 
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_startup_system(toggle_on_start)
+        app.add_startup_system(toggle_on_start)
             .add_system(toggle_mouse_capture)
             .add_plugin(InputManagerPlugin::<Actions>::default());
-
     }
 }
 
@@ -25,7 +23,7 @@ pub enum Actions {
     ShootA,
     ShootB,
     ShootCube,
-    Jump
+    Jump,
 }
 
 pub fn default_input_map() -> InputMap<Actions> {

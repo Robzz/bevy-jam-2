@@ -6,10 +6,7 @@
 //! * The portal origin is at the center of the portal volume.
 //! * The portal clipping plane defined as the portal *back*.
 
-use std::{
-    f32::consts::FRAC_PI_4,
-    time::Duration,
-};
+use std::{f32::consts::FRAC_PI_4, time::Duration};
 
 use bevy::{
     math::{Vec3Swizzles, Vec4Swizzles},
@@ -33,7 +30,10 @@ mod material;
 
 use camera_projection::PortalCameraProjection;
 use material::*;
-use noise::{Fbm, utils::{PlaneMapBuilder, NoiseMapBuilder}};
+use noise::{
+    utils::{NoiseMapBuilder, PlaneMapBuilder},
+    Fbm,
+};
 
 use super::{first_person_controller::*, physics::*};
 
@@ -370,10 +370,10 @@ fn load_portal_assets(
     fbm.lacunarity = 2.;
     fbm.persistence = 0.6;
     let noise_map = PlaneMapBuilder::new(&fbm)
-          .set_size(1024, 1024)
-          .set_x_bounds(-8.0, 8.0)
-          .set_y_bounds(-8.0, 8.0)
-          .build();
+        .set_size(1024, 1024)
+        .set_x_bounds(-8.0, 8.0)
+        .set_y_bounds(-8.0, 8.0)
+        .build();
     let mut buf = Vec::with_capacity(1024 * 1024);
     for x in 0..1024 {
         for y in 0..1024 {
@@ -384,17 +384,20 @@ fn load_portal_assets(
         data: buf,
         texture_descriptor: TextureDescriptor {
             label: None,
-            size: Extent3d { width: 1024, height: 1024, depth_or_array_layers: 1 },
+            size: Extent3d {
+                width: 1024,
+                height: 1024,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::R8Unorm,
-            usage: TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_DST
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         },
         ..default()
     };
-        //::new(, TextureDimension::D2, buf, TextureFormat::R8Unorm);
+    //::new(, TextureDimension::D2, buf, TextureFormat::R8Unorm);
     let noise_texture = images.add(noise_image);
 
     let mut open_materials: [Handle<OpenPortalMaterial>; 2] = default();
@@ -403,13 +406,13 @@ fn load_portal_assets(
         texture: noise_texture.clone(),
         // Orange
         color: Color::rgb_linear(1., 0.7, 0.2),
-        time: 0.
+        time: 0.,
     });
     closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
         texture: noise_texture.clone(),
         // Blue
         color: Color::rgb(0.2, 0.78, 1.),
-        time: 0.
+        time: 0.,
     });
 
     let mut render_targets: [Handle<Image>; 2] = default();
@@ -459,7 +462,7 @@ fn load_portal_assets(
         main_camera: None,
         dbg_sphere_mesh: dbg_mesh,
         dbg_material: dbg_mat,
-        noise_texture
+        noise_texture,
     });
 }
 
@@ -558,16 +561,32 @@ fn set_portal_materials(
     mut commands: Commands,
     portal_a_query: Query<Entity, (With<Portal<0>>, Without<Portal<1>>)>,
     portal_b_query: Query<Entity, (With<Portal<1>>, Without<Portal<0>>)>,
-    resources: Res<PortalResources>
+    resources: Res<PortalResources>,
 ) {
     match (portal_a_query.get_single(), portal_b_query.get_single()) {
         (Ok(portal_a), Ok(portal_b)) => {
-            commands.entity(portal_a).remove::<Handle<ClosedPortalMaterial>>().insert(resources.open_materials[0].clone());
-            commands.entity(portal_b).remove::<Handle<ClosedPortalMaterial>>().insert(resources.open_materials[1].clone());
-        },
-        (Ok(portal_a), Err(_)) => { commands.entity(portal_a).remove::<Handle<OpenPortalMaterial>>().insert(resources.closed_materials[0].clone()); },
-        (Err(_), Ok(portal_b)) => { commands.entity(portal_b).remove::<Handle<OpenPortalMaterial>>().insert(resources.closed_materials[1].clone()); },
-        (Err(_), Err(_)) => { },
+            commands
+                .entity(portal_a)
+                .remove::<Handle<ClosedPortalMaterial>>()
+                .insert(resources.open_materials[0].clone());
+            commands
+                .entity(portal_b)
+                .remove::<Handle<ClosedPortalMaterial>>()
+                .insert(resources.open_materials[1].clone());
+        }
+        (Ok(portal_a), Err(_)) => {
+            commands
+                .entity(portal_a)
+                .remove::<Handle<OpenPortalMaterial>>()
+                .insert(resources.closed_materials[0].clone());
+        }
+        (Err(_), Ok(portal_b)) => {
+            commands
+                .entity(portal_b)
+                .remove::<Handle<OpenPortalMaterial>>()
+                .insert(resources.closed_materials[1].clone());
+        }
+        (Err(_), Err(_)) => {}
     };
 }
 
@@ -753,7 +772,12 @@ fn teleport_player(
     portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
     portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
     mut player: Query<
-        (&mut Transform, &mut Velocity, &mut FirstPersonController, Entity),
+        (
+            &mut Transform,
+            &mut Velocity,
+            &mut FirstPersonController,
+            Entity,
+        ),
         With<PortalTeleport>,
     >,
     mut camera_query: Query<
@@ -765,7 +789,7 @@ fn teleport_player(
             Without<PortalTeleport>,
         ),
     >,
-    rapier: Res<RapierContext>
+    rapier: Res<RapierContext>,
 ) {
     // Player origin is on the ground, so offset the detection distance a bit
     const PLAYER_PROXIMITY_THRESHOLD: f32 = 2.3;
@@ -829,7 +853,10 @@ fn teleport_player(
 
 fn animate_camera_roll(
     mut commands: Commands,
-    mut player_query: Query<(&mut Transform, &mut AnimateRoll, Entity), With<FirstPersonController>>,
+    mut player_query: Query<
+        (&mut Transform, &mut AnimateRoll, Entity),
+        With<FirstPersonController>,
+    >,
     time: Res<Time>,
 ) {
     for (mut transform, mut animation, entity) in &mut player_query {

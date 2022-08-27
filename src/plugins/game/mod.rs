@@ -66,7 +66,7 @@ pub struct PhysicsCubeBundle {
     rigidbody: RigidBody,
     groups: CollisionGroups,
     teleport: PortalTeleport,
-    ccd: Ccd
+    ccd: Ccd,
 }
 
 impl Default for PhysicsCubeBundle {
@@ -78,7 +78,7 @@ impl Default for PhysicsCubeBundle {
             rigidbody: RigidBody::Dynamic,
             groups: CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
             teleport: PortalTeleport,
-            ccd: Ccd::enabled()
+            ccd: Ccd::enabled(),
         }
     }
 }

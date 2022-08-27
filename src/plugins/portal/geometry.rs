@@ -125,15 +125,15 @@ pub fn adjust_player_camera_on_teleport(
         player.rotation = Quat::IDENTITY;
         let horiz_plane_look_dir = Vec3::new(new_look_vector.x, 0., new_look_vector.z);
         if horiz_plane_look_dir.length() > 0.001 {
-            player.look_at(
-                player.translation + horiz_plane_look_dir,
-                Vec3::Y,
-            );
+            player.look_at(player.translation + horiz_plane_look_dir, Vec3::Y);
         }
         let player_mid_plane_look_dir = Vec3::new(0., new_look_vector.y, new_look_vector.z);
         if player_mid_plane_look_dir.length() > 0.001 {
             let player_mid_plane_look_dir = player_mid_plane_look_dir.normalize();
-            camera_local.look_at(player.translation + 0.75 * Vec3::Y + player_mid_plane_look_dir, Vec3::Y);
+            camera_local.look_at(
+                player.translation + 0.75 * Vec3::Y + player_mid_plane_look_dir,
+                Vec3::Y,
+            );
             let pitch = camera_local.forward().dot(Vec3::Y).asin();
             player_controller.pitch = Angle::radians(pitch);
         }

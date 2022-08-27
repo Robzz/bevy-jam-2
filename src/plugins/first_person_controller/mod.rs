@@ -6,16 +6,12 @@
 //!   * Crouching
 //! * Climbing slopes and stairs
 
-use bevy::{
-    prelude::*,
-    reflect::FromReflect,
-    render::camera::Projection,
-};
+use bevy::{prelude::*, reflect::FromReflect, render::camera::Projection};
 use bevy_rapier3d::prelude::*;
 use euclid::Angle;
 use leafwing_input_manager::prelude::*;
 
-use crate::plugins::{input::default_input_map, portal::PortalTeleport, physics::*};
+use crate::plugins::{input::default_input_map, physics::*, portal::PortalTeleport};
 
 use super::input::Actions;
 
@@ -43,7 +39,7 @@ pub enum FirstPersonLabels {
 pub struct FirstPersonController {
     pub yaw: Angle<f32>,
     pub pitch: Angle<f32>,
-    pub camera_anchor: Entity
+    pub camera_anchor: Entity,
 }
 
 #[derive(Debug, Default, Component, Reflect, FromReflect)]
@@ -53,7 +49,7 @@ pub struct FirstPersonCamera;
 
 #[derive(Debug, Component, Default, Reflect, FromReflect)]
 #[reflect(Component)]
-pub struct FirstPersonControllerSpawner { }
+pub struct FirstPersonControllerSpawner {}
 
 #[derive(Debug, Bundle, Default)]
 pub struct FirstPersonControllerBundle {
@@ -91,12 +87,16 @@ fn spawn_controller(
                 RigidBody::Dynamic,
                 Ccd::enabled(),
                 Collider::capsule_y(PLAYER_HEIGHT / 2., 0.4),
-                ColliderMassProperties::MassProperties(MassProperties { local_center_of_mass: Vec3::ZERO, mass: 80., ..default() }),
+                ColliderMassProperties::MassProperties(MassProperties {
+                    local_center_of_mass: Vec3::ZERO,
+                    mass: 80.,
+                    ..default()
+                }),
                 LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z,
                 Velocity::default(),
                 Name::from("Player"),
                 CollisionGroups::new(PLAYER_GROUP, ALL_GROUPS),
-                PortalTeleport
+                PortalTeleport,
             ))
             .id();
 
@@ -147,7 +147,7 @@ fn process_controller_inputs(
         &mut FirstPersonController,
         &mut Velocity,
         &Transform,
-        Option<&CameraLock>
+        Option<&CameraLock>,
     )>,
     mut camera_query: Query<&mut Transform, (Without<FirstPersonController>, Without<CameraLock>)>,
 ) {
@@ -217,7 +217,8 @@ fn process_controller_inputs(
 
             let v_rotation = Quat::from_axis_angle(Vec3::X, -controller.pitch.radians);
             if yaw_lock.is_none() {
-                velocity.angvel.y = mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
+                velocity.angvel.y =
+                    mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
             }
 
             if let Ok(mut camera_transform) = camera_query.get_mut(controller.camera_anchor) {

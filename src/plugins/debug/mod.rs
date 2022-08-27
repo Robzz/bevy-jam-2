@@ -10,7 +10,8 @@ pub struct DeveloperPlugins;
 
 impl PluginGroup for DeveloperPlugins {
     fn build(&mut self, group: &mut bevy::app::PluginGroupBuilder) {
-        group.add(bevy_editor_pls::prelude::EditorPlugin)
+        group
+            .add(bevy_editor_pls::prelude::EditorPlugin)
             //.add(RapierDebugRenderPlugin::default())
             .add(bevy_inspector_egui_rapier::InspectableRapierPlugin);
     }

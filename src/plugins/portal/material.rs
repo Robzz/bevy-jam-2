@@ -1,4 +1,8 @@
-use bevy::{prelude::*, render::render_resource::{AsBindGroup, ShaderRef}, reflect::TypeUuid};
+use bevy::{
+    prelude::*,
+    reflect::TypeUuid,
+    render::render_resource::{AsBindGroup, ShaderRef},
+};
 
 use super::PortalResources;
 
@@ -7,7 +11,7 @@ use super::PortalResources;
 pub struct OpenPortalMaterial {
     #[texture(0)]
     #[sampler(1)]
-    pub texture: Handle<Image>
+    pub texture: Handle<Image>,
 }
 
 impl Material for OpenPortalMaterial {
@@ -35,7 +39,7 @@ pub struct ClosedPortalMaterial {
     #[uniform(2)]
     pub color: Color,
     #[uniform(3)]
-    pub time: f32
+    pub time: f32,
 }
 
 impl Material for ClosedPortalMaterial {
@@ -48,7 +52,7 @@ impl ClosedPortalMaterial {
     pub fn update_time_uniform(
         time: Res<Time>,
         mut materials: ResMut<Assets<ClosedPortalMaterial>>,
-        resources: ResMut<PortalResources>
+        resources: ResMut<PortalResources>,
     ) {
         let t = time.time_since_startup().as_secs_f32();
         for mat in &resources.closed_materials {

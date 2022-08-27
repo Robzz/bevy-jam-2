@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::{RapierContext, RapierConfiguration, TimestepMode};
+use bevy_rapier3d::prelude::{RapierConfiguration, RapierContext, TimestepMode};
 
 pub const WALLS_GROUP: u32 = 0b0000_0001;
 pub const PROPS_GROUP: u32 = 0b0000_0010;
@@ -19,5 +19,9 @@ impl Plugin for PhysicsPlugin {
 
 fn configure_rapier(mut config: ResMut<RapierConfiguration>) {
     // Extra CCD substeps because them portals can go fast
-    config.timestep_mode = TimestepMode::Variable { max_dt: 1. / 20., time_scale: 1., substeps: 4 }
+    config.timestep_mode = TimestepMode::Variable {
+        max_dt: 1. / 20.,
+        time_scale: 1.,
+        substeps: 4,
+    }
 }
