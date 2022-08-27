@@ -787,7 +787,7 @@ fn teleport_player(
             Without<Portal<1>>,
             Without<PortalTeleport>,
         ),
-    >
+    >,
 ) {
     // Player origin is on the ground, so offset the detection distance a bit
     const PLAYER_PROXIMITY_THRESHOLD: f32 = 2.3;
