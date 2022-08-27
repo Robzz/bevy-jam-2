@@ -46,10 +46,30 @@ pub struct PortalPlugin;
 // * Figure where to place the portal cameras
 //   * Same thing for recursive portal iterations
 
+#[derive(Debug, StageLabel)]
+pub enum PortalStages {
+    SpawnPortals,
+}
+
+#[derive(Debug, SystemLabel)]
+pub enum PortalLabels {
+    ShootPortals,
+    UpdateMainCamera,
+    CreateCameras,
+    SyncCameras,
+    TeleportEntities,
+    AnimateCamera,
+}
+
 impl Plugin for PortalPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(MaterialPlugin::<OpenPortalMaterial>::default())
             .add_plugin(MaterialPlugin::<ClosedPortalMaterial>::default())
+            .add_stage_before(
+                CoreStage::Update,
+                PortalStages::SpawnPortals,
+                SystemStage::parallel(),
+            )
             .register_type::<Portal<0>>()
             .register_type::<Portal<1>>()
             .register_type::<PortalOrientation>()
@@ -61,16 +81,19 @@ impl Plugin for PortalPlugin {
                 PortalCameraProjection,
             >::default())
             .add_startup_system(load_portal_assets)
-            .add_system(ClosedPortalMaterial::update_time_uniform)
-            .add_system(set_portal_materials)
-            .add_system(update_main_camera.label(PortalLabels::UpdateMainCamera))
-            .add_system_set(
+            .add_system_to_stage(
+                PortalStages::SpawnPortals,
+                update_main_camera.label(PortalLabels::UpdateMainCamera),
+            )
+            .add_system_set_to_stage(
+                PortalStages::SpawnPortals,
                 SystemSet::new()
                     .label(PortalLabels::ShootPortals)
                     .with_system(fire_portal::<0, 1>)
                     .with_system(fire_portal::<1, 0>),
             )
-            .add_system_set(
+            .add_system_set_to_stage(
+                PortalStages::SpawnPortals,
                 SystemSet::new()
                     .label(PortalLabels::CreateCameras)
                     .after(PortalLabels::ShootPortals)
@@ -78,10 +101,11 @@ impl Plugin for PortalPlugin {
                     .with_system(create_portal_cameras::<0>)
                     .with_system(create_portal_cameras::<1>),
             )
+            .add_system(ClosedPortalMaterial::update_time_uniform)
+            .add_system(set_portal_materials)
             .add_system_set(
                 SystemSet::new()
                     .label(PortalLabels::SyncCameras)
-                    .after(PortalLabels::CreateCameras)
                     .with_system(sync_portal_cameras),
             )
             .add_system(
@@ -216,16 +240,6 @@ impl<const N: u32> Portal<N> {
 
 #[derive(Debug, Default, Component, Reflect, FromReflect)]
 pub struct PortalCamera<const N: u32>;
-
-#[derive(Debug, SystemLabel)]
-pub enum PortalLabels {
-    ShootPortals,
-    UpdateMainCamera,
-    CreateCameras,
-    SyncCameras,
-    TeleportEntities,
-    AnimateCamera,
-}
 
 #[derive(Debug, Component, Clone, Default, Reflect, FromReflect)]
 #[reflect(Component)]
