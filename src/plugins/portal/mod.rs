@@ -32,7 +32,8 @@ mod geometry;
 mod material;
 
 use camera_projection::PortalCameraProjection;
-use material::PortalMaterial;
+use material::*;
+use noise::{Fbm, utils::{PlaneMapBuilder, NoiseMapBuilder}};
 
 use super::{first_person_controller::*, physics::*};
 
@@ -47,17 +48,21 @@ pub struct PortalPlugin;
 
 impl Plugin for PortalPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(MaterialPlugin::<PortalMaterial>::default())
+        app.add_plugin(MaterialPlugin::<OpenPortalMaterial>::default())
+            .add_plugin(MaterialPlugin::<ClosedPortalMaterial>::default())
             .register_type::<Portal<0>>()
             .register_type::<Portal<1>>()
             .register_type::<PortalOrientation>()
             .register_type::<PortalResources>()
-            .register_type::<PortalMaterial>()
+            .register_type::<OpenPortalMaterial>()
+            .register_type::<ClosedPortalMaterial>()
             .register_type::<PortalTeleport>()
             .add_plugin(bevy::render::camera::CameraProjectionPlugin::<
                 PortalCameraProjection,
             >::default())
             .add_startup_system(load_portal_assets)
+            .add_system(ClosedPortalMaterial::update_time_uniform)
+            .add_system(set_portal_materials)
             .add_system(update_main_camera.label(PortalLabels::UpdateMainCamera))
             .add_system_set(
                 SystemSet::new()
@@ -151,11 +156,11 @@ impl PortalPlugin {
 }
 
 #[derive(Debug, Default, Reflect)]
-struct PortalResources {
-    texture_a: Handle<Image>,
-    texture_b: Handle<Image>,
+pub struct PortalResources {
+    noise_texture: Handle<Image>,
     render_targets: [Handle<Image>; 2],
-    open_materials: [Handle<PortalMaterial>; 2],
+    open_materials: [Handle<OpenPortalMaterial>; 2],
+    closed_materials: [Handle<ClosedPortalMaterial>; 2],
     portal_mesh: Handle<Mesh>,
     main_camera: Option<Entity>,
     dbg_sphere_mesh: Handle<Mesh>,
@@ -249,7 +254,7 @@ impl AnimateRoll {
 #[derive(Bundle)]
 pub struct PortalBundle<const N: u32> {
     #[bundle]
-    mesh_bundle: MaterialMeshBundle<PortalMaterial>,
+    mesh_bundle: MaterialMeshBundle<OpenPortalMaterial>,
     render_layers: RenderLayers,
     portal: Portal<N>,
     collider: Collider,
@@ -341,12 +346,11 @@ fn load_portal_assets(
     mut commands: Commands,
     assets: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<PortalMaterial>>,
+    mut materials: ResMut<Assets<OpenPortalMaterial>>,
+    mut closed_materials: ResMut<Assets<ClosedPortalMaterial>>,
     mut std_materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let tex_a = assets.load("textures/portal_a.png");
-    let tex_b = assets.load("textures/portal_b.png");
     let portal_mesh = meshes.add(
         shape::Box {
             min_x: -0.5,
@@ -359,7 +363,54 @@ fn load_portal_assets(
         }
         .into(),
     );
-    let mut open_materials: [Handle<PortalMaterial>; 2] = default();
+
+    let mut fbm = Fbm::new();
+    fbm.octaves = 3;
+    fbm.frequency = 0.5;
+    fbm.lacunarity = 2.;
+    fbm.persistence = 0.6;
+    let noise_map = PlaneMapBuilder::new(&fbm)
+          .set_size(1024, 1024)
+          .set_x_bounds(-8.0, 8.0)
+          .set_y_bounds(-8.0, 8.0)
+          .build();
+    let mut buf = Vec::with_capacity(1024 * 1024);
+    for x in 0..1024 {
+        for y in 0..1024 {
+            buf.push((noise_map.get_value(x, y) * 255.) as u8);
+        }
+    }
+    let noise_image = Image {
+        data: buf,
+        texture_descriptor: TextureDescriptor {
+            label: None,
+            size: Extent3d { width: 1024, height: 1024, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_DST
+        },
+        ..default()
+    };
+        //::new(, TextureDimension::D2, buf, TextureFormat::R8Unorm);
+    let noise_texture = images.add(noise_image);
+
+    let mut open_materials: [Handle<OpenPortalMaterial>; 2] = default();
+    let mut closed_mats: [Handle<ClosedPortalMaterial>; 2] = default();
+    closed_mats[0] = closed_materials.add(ClosedPortalMaterial {
+        texture: noise_texture.clone(),
+        // Orange
+        color: Color::rgb_linear(1., 0.7, 0.2),
+        time: 0.
+    });
+    closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
+        texture: noise_texture.clone(),
+        // Blue
+        color: Color::rgb(0.2, 0.78, 1.),
+        time: 0.
+    });
 
     let mut render_targets: [Handle<Image>; 2] = default();
     for i in 0..2 {
@@ -385,9 +436,9 @@ fn load_portal_assets(
         image.resize(tex_size);
         render_targets[i] = images.add(image);
 
-        open_materials[i] = materials.add(PortalMaterial {
+        open_materials[i] = materials.add(OpenPortalMaterial {
             texture: render_targets[i].clone(),
-        })
+        });
     }
 
     let dbg_mesh = meshes.add(
@@ -401,14 +452,14 @@ fn load_portal_assets(
     let dbg_mat = std_materials.add(Color::PURPLE.into());
 
     commands.insert_resource(PortalResources {
-        texture_a: tex_a,
-        texture_b: tex_b,
         render_targets,
         open_materials,
+        closed_materials: closed_mats,
         portal_mesh,
         main_camera: None,
         dbg_sphere_mesh: dbg_mesh,
         dbg_material: dbg_mat,
+        noise_texture
     });
 }
 
@@ -501,6 +552,23 @@ fn create_portal_cameras<const N: u32>(
             );
         }
     }
+}
+
+fn set_portal_materials(
+    mut commands: Commands,
+    portal_a_query: Query<Entity, (With<Portal<0>>, Without<Portal<1>>)>,
+    portal_b_query: Query<Entity, (With<Portal<1>>, Without<Portal<0>>)>,
+    resources: Res<PortalResources>
+) {
+    match (portal_a_query.get_single(), portal_b_query.get_single()) {
+        (Ok(portal_a), Ok(portal_b)) => {
+            commands.entity(portal_a).remove::<Handle<ClosedPortalMaterial>>().insert(resources.open_materials[0].clone());
+            commands.entity(portal_b).remove::<Handle<ClosedPortalMaterial>>().insert(resources.open_materials[1].clone());
+        },
+        (Ok(portal_a), Err(_)) => { commands.entity(portal_a).remove::<Handle<OpenPortalMaterial>>().insert(resources.closed_materials[0].clone()); },
+        (Err(_), Ok(portal_b)) => { commands.entity(portal_b).remove::<Handle<OpenPortalMaterial>>().insert(resources.closed_materials[1].clone()); },
+        (Err(_), Err(_)) => { },
+    };
 }
 
 fn sync_portal_cameras(
