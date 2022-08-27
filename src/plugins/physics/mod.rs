@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::{RapierConfiguration, RapierContext, TimestepMode};
+use bevy_rapier3d::prelude::{RapierConfiguration, TimestepMode};
 
 pub const WALLS_GROUP: u32 = 0b0000_0001;
 pub const PROPS_GROUP: u32 = 0b0000_0010;

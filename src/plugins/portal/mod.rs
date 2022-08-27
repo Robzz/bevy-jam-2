@@ -136,8 +136,8 @@ impl PortalPlugin {
         }
         let portal = PortalBundle::<N>::from_ray_impact(
             impact,
-            &player_transform,
-            &portal_res,
+            player_transform,
+            portal_res,
             other_portal_entity,
             rapier,
         );
@@ -240,6 +240,7 @@ pub struct AnimateRoll {
     remaining: Duration,
 }
 
+#[allow(dead_code)]
 impl AnimateRoll {
     pub fn new(start: Quat, rotation: Quat, duration: Duration) -> AnimateRoll {
         AnimateRoll {
@@ -344,7 +345,6 @@ const PORTAL_MESH_DEPTH: f32 = 0.5;
 /// Load the assets required to render the portals.
 fn load_portal_assets(
     mut commands: Commands,
-    assets: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<OpenPortalMaterial>>,
     mut closed_materials: ResMut<Assets<ClosedPortalMaterial>>,
@@ -768,7 +768,6 @@ fn teleport_props(
 //   special care. If the computed transform is does not keep the player upright, then
 //   we introduce a short animation bringing the camera back in line with the physical model.
 fn teleport_player(
-    mut commands: Commands,
     portal_a_query: Query<(&Transform, Entity), (With<Portal<0>>, Without<PortalTeleport>)>,
     portal_b_query: Query<(&Transform, Entity), (With<Portal<1>>, Without<PortalTeleport>)>,
     mut player: Query<
@@ -788,8 +787,7 @@ fn teleport_player(
             Without<Portal<1>>,
             Without<PortalTeleport>,
         ),
-    >,
-    rapier: Res<RapierContext>,
+    >
 ) {
     // Player origin is on the ground, so offset the detection distance a bit
     const PLAYER_PROXIMITY_THRESHOLD: f32 = 2.3;
@@ -809,7 +807,7 @@ fn teleport_player(
             if a_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
                 if a_clip_to_player.dot(portal_a_trf.forward()) > 0. {
                     info!("Teleporting player from portal A to portal B");
-                    let a_to_b = geometry::portal_to_portal(&portal_a_trf, &portal_b_trf);
+                    let a_to_b = geometry::portal_to_portal(portal_a_trf, portal_b_trf);
                     geometry::adjust_player_camera_on_teleport(
                         &a_to_b,
                         &camera_global.compute_transform(),
@@ -826,25 +824,25 @@ fn teleport_player(
                         velocity.linvel += MIN_OUTBOUND_SPEED * output_direction;
                     }
                 }
-            } else if b_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD {
-                if b_clip_to_player.dot(portal_b_trf.forward()) > 0. {
-                    info!("Teleporting player from portal B to portal A");
-                    let b_to_a = geometry::portal_to_portal(&portal_b_trf, &portal_a_trf);
-                    geometry::adjust_player_camera_on_teleport(
-                        &b_to_a,
-                        &camera_global.compute_transform(),
-                        &mut camera_transform,
-                        player_entity,
-                        &mut player_transform,
-                        &mut player_controller,
-                    );
+            } else if b_clip_to_player.length() < PLAYER_PROXIMITY_THRESHOLD
+                && b_clip_to_player.dot(portal_b_trf.forward()) > 0.
+            {
+                info!("Teleporting player from portal B to portal A");
+                let b_to_a = geometry::portal_to_portal(portal_b_trf, portal_a_trf);
+                geometry::adjust_player_camera_on_teleport(
+                    &b_to_a,
+                    &camera_global.compute_transform(),
+                    &mut camera_transform,
+                    player_entity,
+                    &mut player_transform,
+                    &mut player_controller,
+                );
 
-                    let output_direction = portal_a_trf.back();
-                    let transformed_velocity = b_to_a.rotation.mul_vec3(velocity.linvel);
-                    velocity.linvel = portal_a_trf.back() * transformed_velocity.length();
-                    if velocity.linvel.dot(output_direction) < MIN_OUTBOUND_SPEED {
-                        velocity.linvel += MIN_OUTBOUND_SPEED * output_direction;
-                    }
+                let output_direction = portal_a_trf.back();
+                let transformed_velocity = b_to_a.rotation.mul_vec3(velocity.linvel);
+                velocity.linvel = portal_a_trf.back() * transformed_velocity.length();
+                if velocity.linvel.dot(output_direction) < MIN_OUTBOUND_SPEED {
+                    velocity.linvel += MIN_OUTBOUND_SPEED * output_direction;
                 }
             }
         }
