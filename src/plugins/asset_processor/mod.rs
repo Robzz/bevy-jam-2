@@ -5,7 +5,9 @@ mod level;
 mod level_processor;
 
 pub use level::Level;
-pub use level_processor::LevelProcessor;
+pub use level_processor::{LevelProcessor, SceneAnimationPlayer};
+
+use self::level_processor::ColliderShape;
 
 use super::game::GameState;
 
@@ -21,22 +23,11 @@ enum SpawnState {
 
 pub struct LevelsPlugin;
 
-#[derive(Debug, StageLabel)]
-pub enum LevelManagerStages {
-    SpawnLevel,
-    PrepareScene,
-}
-
-#[derive(Debug, SystemLabel)]
-enum PrepareStageSystemLabels {
-    ProcessScene,
-    SpawnPlayer,
-    Finalize,
-}
-
 impl Plugin for LevelsPlugin {
     fn build(&self, app: &mut App) {
         app.add_asset::<Level>();
+        app.register_type::<SceneAnimationPlayer>()
+            .register_type::<ColliderShape>();
         app.insert_resource(LevelProcessor::new());
 
         app.add_enter_system(GameState::Loading, LevelProcessor::init_level_transition);
@@ -82,4 +73,17 @@ impl Plugin for LevelsPlugin {
         app.add_system(LevelProcessor::gltf_asset_event_listener);
         app.add_system(LevelProcessor::check_level_loading_progress);
     }
+}
+
+#[derive(Debug, StageLabel)]
+pub enum LevelManagerStages {
+    SpawnLevel,
+    PrepareScene,
+}
+
+#[derive(Debug, SystemLabel)]
+enum PrepareStageSystemLabels {
+    ProcessScene,
+    SpawnPlayer,
+    Finalize,
 }

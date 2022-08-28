@@ -24,6 +24,11 @@ impl Plugin for FirstPersonControllerPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(spawn_controller.label(FirstPersonLabels::SpawnControllers))
             .add_system(process_controller_inputs.label(FirstPersonLabels::ProcessInputs));
+        //.add_system(
+        //move_grabbed_object
+        //.after(FirstPersonLabels::ProcessInputs)
+        //.label(FirstPersonLabels::MoveGrabbedObject),
+        //);
     }
 }
 
@@ -32,6 +37,7 @@ impl Plugin for FirstPersonControllerPlugin {
 pub enum FirstPersonLabels {
     SpawnControllers,
     ProcessInputs,
+    //MoveGrabbedObject,
 }
 
 #[derive(Debug, Component)]
@@ -40,6 +46,7 @@ pub struct FirstPersonController {
     pub yaw: Angle<f32>,
     pub pitch: Angle<f32>,
     pub camera_anchor: Entity,
+    pub grabbed_object: Option<Entity>,
 }
 
 #[derive(Debug, Default, Component, Reflect, FromReflect)]
@@ -130,6 +137,7 @@ fn spawn_controller(
                 yaw: Angle::zero(),
                 pitch: Angle::zero(),
                 camera_anchor,
+                grabbed_object: None,
             });
 
         commands.entity(id).remove::<FirstPersonControllerSpawner>();
@@ -142,16 +150,32 @@ const MOUSE_ANGVEL_MULTIPLIER: f32 = -75.;
 const SPRINT_MULTIPLIER: f32 = 2.;
 
 fn process_controller_inputs(
+    mut commands: Commands,
     mut player_query: Query<(
         &ActionState<Actions>,
         &mut FirstPersonController,
         &mut Velocity,
         &Transform,
         Option<&CameraLock>,
+        Entity,
     )>,
-    mut camera_query: Query<&mut Transform, (Without<FirstPersonController>, Without<CameraLock>)>,
+    mut camera_anchor_query: Query<
+        (&mut Transform, &GlobalTransform),
+        (
+            Without<FirstPersonController>,
+            Without<CameraLock>,
+            With<CameraAnchor>,
+        ),
+    >,
+    mut prop_query: Query<
+        (&Name, &GlobalTransform, &mut Transform, &mut RigidBody),
+        (Without<FirstPersonController>, Without<CameraAnchor>),
+    >,
+    rapier: Res<RapierContext>,
 ) {
-    for (input_state, mut controller, mut velocity, transform, yaw_lock) in &mut player_query {
+    for (input_state, mut controller, mut velocity, transform, yaw_lock, player_entity) in
+        &mut player_query
+    {
         let mut new_velocities = Vec3::new(0., velocity.linvel.y, 0.);
 
         // Process movement on the forward axis
@@ -221,11 +245,71 @@ fn process_controller_inputs(
                     mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
             }
 
-            if let Ok(mut camera_transform) = camera_query.get_mut(controller.camera_anchor) {
+            if let Ok((mut camera_transform, _)) =
+                camera_anchor_query.get_mut(controller.camera_anchor)
+            {
                 camera_transform.rotation = v_rotation;
             }
         } else {
             velocity.angvel.y = 0.;
         }
+
+        // Grab or release object
+        if input_state.just_pressed(Actions::Grab) {
+            if controller.grabbed_object.is_none() {
+                // Raycast in front of the camera for a prop
+                if let Ok((cam_transform, cam_global_transform)) =
+                    camera_anchor_query.get_mut(controller.camera_anchor)
+                {
+                    info!(
+                        "Attempting grab from {} towards {}",
+                        cam_global_transform.translation(),
+                        cam_global_transform.forward()
+                    );
+                    if let Some((entity, distance)) = rapier.cast_ray(
+                        cam_global_transform.translation(),
+                        cam_global_transform.forward(),
+                        1.5,
+                        true,
+                        QueryFilter::new()
+                            .groups(InteractionGroups::new(RAYCAST_GROUP, PROPS_GROUP)),
+                    ) {
+                        let (prop_name, _prop_global_transform, mut prop_transform, mut rigidbody) =
+                            prop_query.get_mut(entity).unwrap();
+                        info!("Found prop {} to grab {} away!", prop_name, distance);
+                        prop_transform.translation = cam_transform.forward() * distance;
+                        prop_transform.rotation = Quat::IDENTITY;
+                        controller.grabbed_object = Some(entity);
+                        *rigidbody = RigidBody::KinematicPositionBased;
+                        commands.entity(player_entity).add_child(entity);
+                    }
+                }
+            } else {
+                // Make the object dynamic again
+                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody) = prop_query
+                    .get_mut(controller.grabbed_object.unwrap())
+                    .unwrap();
+                info!("Releasing prop {}", prop_name);
+                *rigidbody = RigidBody::Dynamic;
+                commands
+                    .entity(player_entity)
+                    .remove_children(&[controller.grabbed_object.unwrap()]);
+                    prop_transform.translation = prop_global_transform.translation();
+                controller.grabbed_object = None;
+            }
+        }
+    }
+}
+
+fn move_grabbed_object(
+    player_query: Query<&FirstPersonController>,
+    grabbed_prop_query: Query<&mut Transform, Without<CameraAnchor>>,
+    camera_anchor_query: Query<&mut GlobalTransform, With<CameraAnchor>>,
+) {
+    if let Ok(player) = player_query.get_single() {
+        if let (Some(grabbed_entity), Ok(camera_transform)) = (
+            player.grabbed_object,
+            camera_anchor_query.get(player.camera_anchor),
+        ) {}
     }
 }
