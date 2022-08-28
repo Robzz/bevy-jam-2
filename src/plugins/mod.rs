@@ -8,3 +8,4 @@ pub mod game;
 pub mod input;
 pub mod physics;
 pub mod portal;
+pub mod render;

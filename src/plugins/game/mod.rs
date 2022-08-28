@@ -53,6 +53,7 @@ impl Plugin for GamePlugin {
         app.add_plugin(doors::DoorsPlugin);
         app.add_plugin(physics::PhysicsPlugin);
         app.add_plugin(portal::PortalPlugin);
+        app.add_plugin(render::RenderPlugin);
         app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(first_person_controller::FirstPersonControllerPlugin);
         app.add_plugin(input::InputPlugin);

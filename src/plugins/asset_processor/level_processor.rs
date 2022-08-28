@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer};
 use std::str::FromStr;
 
 use crate::plugins::{
-    first_person_controller::*, game::GameState, physics::*, portal::PortalTeleport, doors::{DoorSensor, DoorSidedness, Door},
+    first_person_controller::*, game::GameState, physics::*, portal::PortalTeleport, doors::{DoorSensor, DoorSidedness, Door}, render::{GridMaterial, RenderResources},
 };
 
 use super::{Level, SpawnState};
@@ -35,6 +35,9 @@ pub(crate) struct MeshExtras {
     #[serde(default)]
     #[serde(deserialize_with = "bool_from_string")]
     visibility: Option<bool>,
+    #[serde(default)]
+    #[serde(deserialize_with = "bool_from_string")]
+    grid: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,10 +180,10 @@ impl LevelProcessor {
         }
     }
 
-    pub(crate) fn preprocess_scene(scene: &mut Scene) {
+    pub(crate) fn preprocess_scene(scene: &mut Scene, grids: &Res<RenderResources>) {
         Self::preprocess_point_lights(scene);
         Self::preprocess_nodes(scene);
-        Self::preprocess_meshes(scene);
+        Self::preprocess_meshes(scene, grids);
     }
 
     /// Process point lights in the scene to adjust the shadows setting.
@@ -196,7 +199,7 @@ impl LevelProcessor {
     }
 
     /// Modify the visibility components of meshes.
-    pub(crate) fn preprocess_meshes(scene: &mut Scene) {
+    pub(crate) fn preprocess_meshes(scene: &mut Scene, grids: &Res<RenderResources>) {
         let mut meshes_query = scene.world.query::<(&Handle<Mesh>, &Parent, Entity)>();
         let mut extras_map = HashMap::new();
         for (_mesh, parent, id) in meshes_query.iter(&scene.world) {
@@ -206,7 +209,7 @@ impl LevelProcessor {
                     Ok(mesh_extras) => {
                         extras_map.insert(id, mesh_extras);
                     }
-                    Err(e) => println!("Deserializer error: {}", e),
+                    Err(e) => warn!("Deserializer error: {}", e),
                 }
             }
         }
@@ -218,6 +221,11 @@ impl LevelProcessor {
                 entity.insert(Visibility {
                     is_visible: visibility,
                 });
+            }
+
+            if let Some(true) = extras.grid {
+                entity.remove::<Handle<StandardMaterial>>();
+                entity.insert(grids.default_grid_material.clone());
             }
         }
     }
@@ -253,6 +261,7 @@ impl LevelProcessor {
         mut scenes: ResMut<Assets<Scene>>,
         mut gltfs: ResMut<Assets<Gltf>>,
         mut events: EventReader<AssetEvent<Gltf>>,
+        grids: Res<RenderResources>
     ) {
         for event in events.iter() {
             match event {
@@ -265,7 +274,7 @@ impl LevelProcessor {
                     }
                     if let Some(_level) = level_manager.loaded_levels_gltfs.get(handle) {
                         let mut gltf = gltfs.get_mut(handle).unwrap();
-                        Self::update_level_on_gltf_reload(&mut scenes, &mut gltf);
+                        Self::update_level_on_gltf_reload(&mut scenes, &grids, &mut gltf);
                         level_manager.hot_reloaded.insert(handle.to_owned());
                     }
                 }
@@ -402,6 +411,7 @@ impl LevelProcessor {
         mut level_manager: ResMut<LevelProcessor>,
         mut levels: ResMut<Assets<Level>>,
         mut scenes: ResMut<Assets<Scene>>,
+        mut grid_materials: Res<RenderResources>,
         mut gltfs: ResMut<Assets<Gltf>>,
         asset_server: Res<AssetServer>,
     ) {
@@ -420,6 +430,7 @@ impl LevelProcessor {
                             &mut gltf,
                             level_gltf,
                             level_name,
+                            &grid_materials
                         );
                         loaded_levels.push((level_name.to_owned(), level, level_gltf.to_owned()));
                     }
@@ -487,6 +498,7 @@ impl LevelProcessor {
         gltf: &mut Gltf,
         handle: &Handle<Gltf>,
         level_name: &str,
+        grids: &Res<RenderResources>
     ) -> Handle<Level> {
         let mut spawn_nodes = HashMap::new();
         for (name, node) in &gltf.named_nodes {
@@ -504,7 +516,7 @@ impl LevelProcessor {
         let mut default_scene = scenes.get_mut(default_scene_handle).unwrap();
 
         // Add required components to the entities in the scene's world based on the GltfExtras
-        LevelProcessor::preprocess_scene(&mut default_scene);
+        LevelProcessor::preprocess_scene(&mut default_scene, &grids);
         let level = Level::new(
             handle.to_owned(),
             // No need for strong handles if we're keeping a handle to the level besides the
@@ -519,10 +531,10 @@ impl LevelProcessor {
         levels.add(level)
     }
 
-    fn update_level_on_gltf_reload(scenes: &mut ResMut<Assets<Scene>>, gltf: &mut Gltf) {
+    fn update_level_on_gltf_reload(scenes: &mut ResMut<Assets<Scene>>, grids: &Res<RenderResources>, gltf: &mut Gltf) {
         let default_scene_handle = gltf.default_scene.as_ref().unwrap();
         let mut default_scene = scenes.get_mut(default_scene_handle).unwrap();
-        LevelProcessor::preprocess_scene(&mut default_scene);
+        LevelProcessor::preprocess_scene(&mut default_scene, &grids);
     }
 
     fn compute_nonconvex_collider(mesh: &Mesh) -> Collider {
