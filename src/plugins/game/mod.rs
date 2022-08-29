@@ -32,7 +32,7 @@ pub enum GameState {
 
 #[derive(Debug, StageLabel)]
 pub enum GameStages {
-    Pickups
+    Pickups,
 }
 
 #[derive(Debug)]
@@ -46,7 +46,11 @@ impl Plugin for GamePlugin {
         app.add_loopless_state(GameState::MainMenu);
         app.add_startup_system(game_startup);
 
-        app.add_stage_after(CoreStage::Update, GameStages::Pickups, SystemStage::single_threaded());
+        app.add_stage_after(
+            CoreStage::Update,
+            GameStages::Pickups,
+            SystemStage::single_threaded(),
+        );
 
         app.register_type::<Pickup>()
             .register_type::<PickupSensor>()
@@ -76,7 +80,10 @@ impl Plugin for GamePlugin {
         //.add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
         .add_system(load_level_when_ready.run_in_state(GameState::MainMenu))
         .add_system(throw_cube.run_in_state(GameState::InGame))
-        .add_system_to_stage(GameStages::Pickups, process_pickups.run_in_state(GameState::InGame));
+        .add_system_to_stage(
+            GameStages::Pickups,
+            process_pickups.run_in_state(GameState::InGame),
+        );
     }
 }
 
@@ -235,22 +242,18 @@ fn process_pickups(
                     info!("Pickup {} activated", sensor.pickup_id);
                     if sensor.pickup_id == 1 {
                         commands.insert_resource(PlayerProgress::HasPortalGun);
-                    }
-                    else if sensor.pickup_id == 2 {
+                    } else if sensor.pickup_id == 2 {
                         commands.insert_resource(PlayerProgress::HasImprovedPortalGun);
                     }
                     for (pickup, pickup_entity) in &pickups_query {
                         if pickup.id == sensor.pickup_id {
-                            commands.entity(pickup_entity)
-                                .despawn_recursive();
+                            commands.entity(pickup_entity).despawn_recursive();
                         }
                     }
-                    commands.entity(sensor_entity)
-                        .despawn_recursive();
+                    commands.entity(sensor_entity).despawn_recursive();
                 }
             }
-            CollisionEvent::Stopped(_collider_a, _collider_b, _flags) => {
-            }
+            CollisionEvent::Stopped(_collider_a, _collider_b, _flags) => {}
         }
     }
 }

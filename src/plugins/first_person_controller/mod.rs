@@ -44,7 +44,11 @@ impl Plugin for FirstPersonControllerPlugin {
                 .run_in_state(GameState::InGame)
                 .label(FirstPersonLabels::ProcessInputs),
         )
-        .add_system(show_gun_on_pickup.run_in_state(GameState::InGame).label(FirstPersonLabels::ToggleGun));
+        .add_system(
+            show_gun_on_pickup
+                .run_in_state(GameState::InGame)
+                .label(FirstPersonLabels::ToggleGun),
+        );
     }
 }
 

@@ -117,14 +117,8 @@ impl Plugin for PortalPlugin {
                     .label(PortalLabels::TeleportEntities)
                     .after(PortalLabels::SyncCameras),
             )
-            .add_system(
-                apply_portal_attraction
-                    .after(PortalLabels::TeleportEntities),
-            )
-            .add_system(
-                apply_portal_repulsion
-                    .after(PortalLabels::TeleportEntities),
-            )
+            .add_system(apply_portal_attraction.after(PortalLabels::TeleportEntities))
+            .add_system(apply_portal_repulsion.after(PortalLabels::TeleportEntities))
             .add_system(
                 animate_camera_roll
                     .label(PortalLabels::AnimateCamera)
@@ -904,16 +898,14 @@ fn apply_portal_attraction(
             for (rb_transform, entity) in &rigidbodies {
                 let rb_to_portal = portal_transform.translation() - rb_transform.translation();
                 let distance = rb_to_portal.length();
-                if distance < PORTAL_PHYSICS_DISTANCE
-                {
+                if distance < PORTAL_PHYSICS_DISTANCE {
                     commands.entity(entity).insert(ExternalImpulse {
-                        impulse: rb_to_portal.normalize() * PORTAL_BASE_PHYSICS_IMPULSE / (distance * distance),
+                        impulse: rb_to_portal.normalize() * PORTAL_BASE_PHYSICS_IMPULSE
+                            / (distance * distance),
                         ..default()
                     });
-                }
-                else {
-                    commands.entity(entity)
-                        .remove::<ExternalImpulse>();
+                } else {
+                    commands.entity(entity).remove::<ExternalImpulse>();
                 }
             }
         }
@@ -931,16 +923,14 @@ fn apply_portal_repulsion(
             for (rb_transform, entity) in &rigidbodies {
                 let portal_to_rb = rb_transform.translation() - portal_transform.translation();
                 let distance = portal_to_rb.length();
-                if distance < PORTAL_PHYSICS_DISTANCE
-                {
+                if distance < PORTAL_PHYSICS_DISTANCE {
                     commands.entity(entity).insert(ExternalImpulse {
-                        impulse: portal_to_rb.normalize() * PORTAL_BASE_PHYSICS_IMPULSE / (distance * distance),
+                        impulse: portal_to_rb.normalize() * PORTAL_BASE_PHYSICS_IMPULSE
+                            / (distance * distance),
                         ..default()
                     });
-                }
-                else {
-                    commands.entity(entity)
-                        .remove::<ExternalImpulse>();
+                } else {
+                    commands.entity(entity).remove::<ExternalImpulse>();
                 }
             }
         }

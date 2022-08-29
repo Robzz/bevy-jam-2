@@ -30,7 +30,6 @@ pub const LEVEL_DYNAMIC_GEOMETRY_SUFFIX: &str = ".prop";
 pub const ANIMATION_OPEN_DOOR_PREFIX: &str = "OpenDoor";
 pub const ANIMATION_CLOSE_DOOR_PREFIX: &str = "CloseDoor";
 
-
 #[derive(Debug, Component, Default, Reflect, FromReflect)]
 #[reflect(Component)]
 pub struct SceneAnimationPlayer;
@@ -570,7 +569,9 @@ impl LevelProcessor {
                             }
                         }
 
-                        if let Ok((_pickup_sensor, children, entity)) = pickups_sensors_query.get(scene_entity) {
+                        if let Ok((_pickup_sensor, children, entity)) =
+                            pickups_sensors_query.get(scene_entity)
+                        {
                             if let Ok((_, mesh_handle, opt_shape, _)) =
                                 fixed_geometry_query.get(*children.first().unwrap())
                             {
