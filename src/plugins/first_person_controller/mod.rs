@@ -286,15 +286,16 @@ fn process_controller_inputs(
                 }
             } else {
                 // Make the object dynamic again
-                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody) = prop_query
-                    .get_mut(controller.grabbed_object.unwrap())
-                    .unwrap();
+                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody) =
+                    prop_query
+                        .get_mut(controller.grabbed_object.unwrap())
+                        .unwrap();
                 info!("Releasing prop {}", prop_name);
                 *rigidbody = RigidBody::Dynamic;
                 commands
                     .entity(player_entity)
                     .remove_children(&[controller.grabbed_object.unwrap()]);
-                    prop_transform.translation = prop_global_transform.translation();
+                prop_transform.translation = prop_global_transform.translation();
                 controller.grabbed_object = None;
             }
         }

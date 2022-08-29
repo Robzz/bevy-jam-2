@@ -24,7 +24,7 @@ pub enum Actions {
     ShootB,
     ShootCube,
     Jump,
-    Grab
+    Grab,
 }
 
 pub fn default_input_map() -> InputMap<Actions> {

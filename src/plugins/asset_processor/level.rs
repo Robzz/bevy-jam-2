@@ -1,6 +1,8 @@
 use bevy::{
     gltf::{Gltf, GltfNode},
-    prelude::*, reflect::TypeUuid, utils::HashMap,
+    prelude::*,
+    reflect::TypeUuid,
+    utils::HashMap,
 };
 
 #[derive(Debug, TypeUuid)]

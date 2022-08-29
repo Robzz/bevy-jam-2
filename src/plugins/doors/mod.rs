@@ -63,7 +63,8 @@ fn open_doors_on_sensor_activation(
                         .or_else(|_| sensor_query.get(*collider_b))
                         .map(|r| r.1);
                     if let Ok(sensor_entity) = maybe_sensor_entity {
-                        let (mut sensor, sensor_entity) = sensor_query.get_mut(sensor_entity).unwrap();
+                        let (mut sensor, sensor_entity) =
+                            sensor_query.get_mut(sensor_entity).unwrap();
                         let cause = if &sensor_entity == collider_a {
                             *collider_b
                         } else {
@@ -89,7 +90,8 @@ fn open_doors_on_sensor_activation(
                         .or_else(|_| sensor_query.get(*collider_b))
                         .map(|r| r.1);
                     if let Ok(sensor_entity) = maybe_sensor_entity {
-                        let (mut sensor, sensor_entity) = sensor_query.get_mut(sensor_entity).unwrap();
+                        let (mut sensor, sensor_entity) =
+                            sensor_query.get_mut(sensor_entity).unwrap();
                         let cause = if &sensor_entity == collider_a {
                             *collider_b
                         } else {

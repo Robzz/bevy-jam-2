@@ -1,4 +1,3 @@
-
 use crate::plugins::*;
 
 use bevy::prelude::*;
@@ -7,12 +6,11 @@ use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
 
 use super::{
-    first_person_controller::{
-        FirstPersonCamera, FirstPersonController
-    },
+    asset_processor::{Level, LevelProcessor},
+    first_person_controller::{FirstPersonCamera, FirstPersonController},
     input::Actions,
     physics::*,
-    portal::PortalTeleport, asset_processor::{LevelProcessor, Level},
+    portal::PortalTeleport,
 };
 
 // region:    --- Asset Constants
@@ -158,10 +156,7 @@ pub const LOBBY_LEVEL_NAME: &str = "lobby";
 pub const LOBBY_LEVEL_FILE: &str = "levels/level1.glb";
 
 /// Perform game initialization
-fn game_startup(
-    assets: Res<AssetServer>,
-    mut level_manager: ResMut<LevelProcessor>,
-) {
+fn game_startup(assets: Res<AssetServer>, mut level_manager: ResMut<LevelProcessor>) {
     level_manager.load_level(LOBBY_LEVEL_FILE, LOBBY_LEVEL_NAME.to_owned(), &assets);
 }
 
@@ -170,19 +165,21 @@ fn load_level_when_ready(
     mut level_events: EventReader<AssetEvent<Level>>,
     mut level_manager: ResMut<LevelProcessor>,
     levels: Res<Assets<Level>>,
-    mut loaded: Local<bool>
+    mut loaded: Local<bool>,
 ) {
     for event in level_events.iter() {
         match event {
             AssetEvent::Created { handle } => {
                 let level = levels.get(handle).unwrap();
                 if level.name == LOBBY_LEVEL_NAME {
-                    level_manager.instantiate_level(&mut commands, LOBBY_LEVEL_NAME).expect("Can not instantiate level");
+                    level_manager
+                        .instantiate_level(&mut commands, LOBBY_LEVEL_NAME)
+                        .expect("Can not instantiate level");
                     *loaded = true;
                 }
-            },
-            AssetEvent::Modified { handle: _ } => { },
-            AssetEvent::Removed { handle: _ } => { },
+            }
+            AssetEvent::Modified { handle: _ } => {}
+            AssetEvent::Removed { handle: _ } => {}
         }
     }
 }

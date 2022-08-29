@@ -49,6 +49,13 @@ fn load_render_textures(
     mut grids: ResMut<Assets<GridMaterial>>,
 ) {
     let grid_texture = assets.load("textures/PolygonPrototype_Texture_Grid_01.png");
-    let default_grid = grids.add(GridMaterial { texture: grid_texture.clone(), grid_strength: 1.0, base_color: Color::GRAY });
-    commands.insert_resource(RenderResources { grid_texture, default_grid_material: default_grid });
+    let default_grid = grids.add(GridMaterial {
+        texture: grid_texture.clone(),
+        grid_strength: 1.0,
+        base_color: Color::GRAY,
+    });
+    commands.insert_resource(RenderResources {
+        grid_texture,
+        default_grid_material: default_grid,
+    });
 }

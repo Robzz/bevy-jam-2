@@ -40,8 +40,7 @@ impl Plugin for LevelsPlugin {
         );
         app.add_system_to_stage(
             LevelManagerStages::SpawnLevel,
-            LevelProcessor::spawn_level_system
-                .run_in_state(GameState::Loading)
+            LevelProcessor::spawn_level_system.run_in_state(GameState::Loading),
         );
 
         app.add_stage_after(
@@ -53,7 +52,7 @@ impl Plugin for LevelsPlugin {
             LevelManagerStages::PrepareScene,
             LevelProcessor::postprocess_scene
                 .run_in_state(GameState::Loading)
-                .label(PrepareStageSystemLabels::ProcessScene)
+                .label(PrepareStageSystemLabels::ProcessScene),
         );
         app.add_system_to_stage(
             LevelManagerStages::PrepareScene,
