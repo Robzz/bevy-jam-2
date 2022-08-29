@@ -3,7 +3,7 @@
 use bevy::{
     prelude::*,
     reflect::{Reflect, TypeUuid},
-    render::render_resource::{AsBindGroup, ShaderRef},
+    render::render_resource::{AsBindGroup, ShaderRef, ShaderType},
 };
 
 #[derive(Debug, Default, Reflect)]
@@ -23,6 +23,12 @@ impl Plugin for RenderPlugin {
     }
 }
 
+#[derive(Debug, Clone, ShaderType, Reflect)]
+pub struct GridUniform {
+    pub grid_strength: Vec4,
+    pub base_color: Color,
+}
+
 #[derive(AsBindGroup, Debug, Clone, TypeUuid, Reflect)]
 #[uuid = "bac0548a-d97a-4d30-a275-18a4f0d1fc9f"]
 /// Overlay a grid texture over non UV-unwrapped mesh, using the world coordinates as UVs.
@@ -32,9 +38,7 @@ pub struct GridMaterial {
     #[sampler(1)]
     pub texture: Handle<Image>,
     #[uniform(2)]
-    pub grid_strength: Vec4,
-    #[uniform(3)]
-    pub base_color: Color,
+    pub grid_params: GridUniform
 }
 
 impl Material for GridMaterial {
@@ -51,8 +55,10 @@ fn load_render_textures(
     let grid_texture = assets.load("textures/PolygonPrototype_Texture_Grid_01.png");
     let default_grid = grids.add(GridMaterial {
         texture: grid_texture.clone(),
-        grid_strength: Vec4::ONE,
-        base_color: Color::GRAY,
+        grid_params: GridUniform {
+            grid_strength: Vec4::ONE,
+            base_color: Color::rgba(0.5, 0.5, 0.5, 1.),
+        }
     });
     commands.insert_resource(RenderResources {
         grid_texture,

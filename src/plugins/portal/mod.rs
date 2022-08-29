@@ -418,14 +418,18 @@ fn load_portal_assets(
     closed_mats[0] = closed_materials.add(ClosedPortalMaterial {
         texture: noise_texture.clone(),
         // Orange
-        color: Color::rgb_linear(1., 0.7, 0.2),
-        time: Vec4::ZERO,
+        uniform: ClosedPortalUniform {
+            color: Color::rgba(1., 0.7, 0.2, 1.),
+            time: Vec4::ZERO,
+        },
     });
     closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
         texture: noise_texture.clone(),
         // Blue
-        color: Color::rgb(0.2, 0.78, 1.),
-        time: Vec4::ZERO,
+        uniform: ClosedPortalUniform {
+            color: Color::rgba(0.2, 0.78, 1., 1.),
+            time: Vec4::ZERO,
+        }
     });
 
     let mut render_targets: [Handle<Image>; 2] = default();

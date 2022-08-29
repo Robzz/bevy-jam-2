@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer};
 use std::str::FromStr;
 
 use crate::plugins::{
-    doors::{Door, DoorSensor, DoorSidedness},
+    doors::{Door, DoorSensor},
     first_person_controller::*,
     game::GameState,
     physics::*,
@@ -49,7 +49,6 @@ pub(crate) struct MeshExtras {
     #[serde(default)]
     #[serde(deserialize_with = "bool_from_string")]
     grid: Option<bool>,
-    #[serde(default)]
     shape: Option<ColliderShape>,
 }
 
@@ -93,7 +92,6 @@ pub struct NodeExtras {
     #[serde(default)]
     #[serde(deserialize_with = "u32_from_string")]
     door: Option<u32>,
-    sidedness: Option<DoorSidedness>,
 }
 
 fn bool_from_string<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
@@ -315,10 +313,9 @@ impl LevelProcessor {
                 });
             }
 
-            if let (Some(door_id), Some(door_sidedness)) = (extras.door, extras.sidedness) {
+            if let Some(door_id) = extras.door {
                 entity.insert(Door {
                     id: door_id,
-                    sidedness: door_sidedness,
                     animation_open: gltf
                         .named_animations
                         .get(&format!("{}_{}", ANIMATION_OPEN_DOOR_PREFIX, door_id))
@@ -403,6 +400,7 @@ impl LevelProcessor {
                             if name.ends_with(LEVEL_STATIC_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
+                                dbg!(&shape, name);
                                 commands.entity(entity).insert_bundle((
                                     CollisionGroups::new(
                                         WALLS_GROUP,
@@ -414,6 +412,7 @@ impl LevelProcessor {
                             } else if name.ends_with(LEVEL_GROUND_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
+                                dbg!(&shape, name);
                                 commands.entity(entity).insert_bundle((
                                     CollisionGroups::new(
                                         GROUND_GROUP,
@@ -680,7 +679,13 @@ impl LevelProcessor {
             &match shape {
                 ColliderShape::Convex => ComputedColliderShape::TriMesh,
                 ColliderShape::Concave => {
-                    ComputedColliderShape::ConvexDecomposition(VHACDParameters::default())
+                    let vhacd_params = VHACDParameters {
+                        fill_mode: FillMode::FloodFill { detect_cavities: true },
+                        convex_hull_approximation: true,
+                        resolution: 128,
+                        ..default()
+                    };
+                    ComputedColliderShape::ConvexDecomposition(vhacd_params)
                 }
             },
         )
