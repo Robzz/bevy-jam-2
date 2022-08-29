@@ -29,11 +29,12 @@ pub enum Actions {
 
 pub fn default_input_map() -> InputMap<Actions> {
     let mut input_map = InputMap::new([
-        (KeyCode::Z, Actions::Forward),
+        (KeyCode::W, Actions::Forward),
         (KeyCode::S, Actions::Backwards),
-        (KeyCode::Q, Actions::StrafeLeft),
+        (KeyCode::A, Actions::StrafeLeft),
         (KeyCode::D, Actions::StrafeRight),
         (KeyCode::F, Actions::Grab),
+        (KeyCode::Q, Actions::ShootCube),
         (KeyCode::LShift, Actions::Sprint),
         (KeyCode::Space, Actions::Jump),
     ]);

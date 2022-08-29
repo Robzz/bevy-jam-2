@@ -6,14 +6,26 @@
 //!   * Crouching
 //! * Climbing slopes and stairs
 
-use bevy::{prelude::*, reflect::FromReflect, render::camera::Projection};
+use std::f32::consts::PI;
+
+use bevy::{
+    gltf::{Gltf, GltfMesh},
+    prelude::*,
+    reflect::FromReflect,
+    render::camera::Projection,
+};
 use bevy_rapier3d::prelude::*;
 use euclid::Angle;
+use iyes_loopless::condition::IntoConditionalExclusiveSystem;
 use leafwing_input_manager::prelude::*;
 
 use crate::plugins::{input::default_input_map, physics::*, portal::PortalTeleport};
 
-use super::input::Actions;
+use super::{
+    asset_processor::{CurrentLevel, Level},
+    game::{GameState, PlayerProgress},
+    input::Actions,
+};
 
 #[derive(Debug)]
 /// First person controller plugin, which registers the required systems to use the first person
@@ -22,13 +34,21 @@ pub struct FirstPersonControllerPlugin;
 
 impl Plugin for FirstPersonControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(spawn_controller.label(FirstPersonLabels::SpawnControllers))
-            .add_system(process_controller_inputs.label(FirstPersonLabels::ProcessInputs));
-        //.add_system(
-        //move_grabbed_object
-        //.after(FirstPersonLabels::ProcessInputs)
-        //.label(FirstPersonLabels::MoveGrabbedObject),
-        //);
+        app.add_system(
+            spawn_controller
+                .run_in_state(GameState::InGame)
+                .label(FirstPersonLabels::SpawnControllers),
+        )
+        .add_system(
+            process_controller_inputs
+                .run_in_state(GameState::InGame)
+                .label(FirstPersonLabels::ProcessInputs),
+        )
+        .add_system(
+            show_gun_on_pickup
+                .run_in_state(GameState::InGame)
+                .label(FirstPersonLabels::ToggleGun),
+        );
     }
 }
 
@@ -37,7 +57,7 @@ impl Plugin for FirstPersonControllerPlugin {
 pub enum FirstPersonLabels {
     SpawnControllers,
     ProcessInputs,
-    //MoveGrabbedObject,
+    ToggleGun,
 }
 
 #[derive(Debug, Component)]
@@ -46,6 +66,7 @@ pub struct FirstPersonController {
     pub yaw: Angle<f32>,
     pub pitch: Angle<f32>,
     pub camera_anchor: Entity,
+    pub weapon_node: Entity,
     pub grabbed_object: Option<Entity>,
 }
 
@@ -75,15 +96,19 @@ pub struct CameraAnchor;
 /// respective rotational degree of freedom.
 pub struct CameraLock;
 
+pub const PLAYER_HEIGHT: f32 = 1.8;
+const EYE_HEIGHT: f32 = 1.5;
+const CAMERA_OFFSET: Vec3 = Vec3::new(0., EYE_HEIGHT - PLAYER_HEIGHT / 2., 0.);
+
 fn spawn_controller(
     mut commands: Commands,
     spawners_query: Query<(&FirstPersonControllerSpawner, Entity)>,
+    current_level: Res<CurrentLevel>,
+    levels: Res<Assets<Level>>,
+    gltfs: Res<Assets<Gltf>>,
+    gltf_meshes: Res<Assets<GltfMesh>>,
 ) {
     for (_spawner, id) in &spawners_query {
-        const PLAYER_HEIGHT: f32 = 1.8;
-        const EYE_HEIGHT: f32 = 0.6;
-        const CAMERA_OFFSET: Vec3 = Vec3::new(0., EYE_HEIGHT - PLAYER_HEIGHT / 2., 0.);
-
         let player_root = commands
             .entity(id)
             .insert_bundle(InputManagerBundle {
@@ -92,8 +117,8 @@ fn spawn_controller(
             })
             .insert_bundle((
                 RigidBody::Dynamic,
-                Ccd::enabled(),
-                Collider::capsule_y(PLAYER_HEIGHT / 2., 0.4),
+                Ccd::disabled(),
+                Collider::capsule_y((PLAYER_HEIGHT - 0.8) / 2., 0.4),
                 ColliderMassProperties::MassProperties(MassProperties {
                     local_center_of_mass: Vec3::ZERO,
                     mass: 80.,
@@ -105,6 +130,28 @@ fn spawn_controller(
                 CollisionGroups::new(PLAYER_GROUP, ALL_GROUPS),
                 PortalTeleport,
             ))
+            .id();
+
+        let level = levels.get(&current_level.get()).unwrap();
+        let gltf = gltfs.get(&level.gltf).unwrap();
+        let portal_gun_mesh = gltf_meshes
+            .get(gltf.named_meshes.get("Scene.070").unwrap())
+            .unwrap();
+        let primitive = portal_gun_mesh.primitives.first().unwrap();
+        let material = primitive.material.clone().unwrap();
+
+        let gun_entity = commands
+            .spawn_bundle(PbrBundle {
+                mesh: primitive.mesh.clone(),
+                material,
+                transform: Transform {
+                    translation: Vec3::new(0.2, -0.2, -0.6),
+                    rotation: Quat::from_rotation_y(PI),
+                    ..default()
+                },
+                visibility: Visibility { is_visible: false },
+                ..default()
+            })
             .id();
 
         let camera_anchor = commands
@@ -128,7 +175,9 @@ fn spawn_controller(
             .insert_bundle((Name::from("Player camera"), FirstPersonCamera))
             .id();
 
-        commands.entity(camera_anchor).push_children(&[camera]);
+        commands
+            .entity(camera_anchor)
+            .push_children(&[camera, gun_entity]);
 
         commands
             .entity(player_root)
@@ -138,6 +187,7 @@ fn spawn_controller(
                 pitch: Angle::zero(),
                 camera_anchor,
                 grabbed_object: None,
+                weapon_node: gun_entity,
             });
 
         commands.entity(id).remove::<FirstPersonControllerSpawner>();
@@ -160,7 +210,7 @@ fn process_controller_inputs(
         Entity,
     )>,
     mut camera_anchor_query: Query<
-        (&mut Transform, &GlobalTransform),
+        (&mut Transform, &GlobalTransform, Entity),
         (
             Without<FirstPersonController>,
             Without<CameraLock>,
@@ -251,7 +301,7 @@ fn process_controller_inputs(
                     mouse_movement.x() * MOUSE_SENSITIVITY * MOUSE_ANGVEL_MULTIPLIER;
             }
 
-            if let Ok((mut camera_transform, _)) =
+            if let Ok((mut camera_transform, _, _)) =
                 camera_anchor_query.get_mut(controller.camera_anchor)
             {
                 camera_transform.rotation = v_rotation;
@@ -264,7 +314,7 @@ fn process_controller_inputs(
         if input_state.just_pressed(Actions::Grab) {
             if controller.grabbed_object.is_none() {
                 // Raycast in front of the camera for a prop
-                if let Ok((cam_transform, cam_global_transform)) =
+                if let Ok((cam_transform, cam_global_transform, camera_entity)) =
                     camera_anchor_query.get_mut(controller.camera_anchor)
                 {
                     info!(
@@ -296,7 +346,7 @@ fn process_controller_inputs(
                             WALLS_GROUP | GROUND_GROUP | DOOR_SENSORS_GROUP,
                         );
                         *rigidbody = RigidBody::KinematicPositionBased;
-                        commands.entity(player_entity).add_child(entity);
+                        commands.entity(camera_entity).add_child(entity);
                     }
                 }
             } else {
@@ -318,6 +368,20 @@ fn process_controller_inputs(
                 *collision_groups = CollisionGroups::new(PROPS_GROUP, ALL_GROUPS);
                 prop_transform.translation = prop_global_transform.translation();
                 controller.grabbed_object = None;
+            }
+        }
+    }
+}
+
+fn show_gun_on_pickup(
+    mut visibility_query: Query<&mut Visibility>,
+    player_query: Query<&FirstPersonController>,
+    progress: Res<PlayerProgress>,
+) {
+    if *progress != PlayerProgress::GettingStarted {
+        for controller in &player_query {
+            if let Ok(mut visibility) = visibility_query.get_mut(controller.weapon_node) {
+                visibility.is_visible = true;
             }
         }
     }

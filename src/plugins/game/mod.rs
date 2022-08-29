@@ -1,6 +1,6 @@
 use crate::plugins::*;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::FromReflect};
 use bevy_rapier3d::prelude::*;
 use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
@@ -30,6 +30,11 @@ pub enum GameState {
     //Paused
 }
 
+#[derive(Debug, StageLabel)]
+pub enum GameStages {
+    Pickups,
+}
+
 #[derive(Debug)]
 /// Main game plugin, responsible for loading the other game plugins and bootstrapping the game.
 pub struct GamePlugin;
@@ -41,6 +46,18 @@ impl Plugin for GamePlugin {
         app.add_loopless_state(GameState::MainMenu);
         app.add_startup_system(game_startup);
 
+        app.add_stage_after(
+            CoreStage::Update,
+            GameStages::Pickups,
+            SystemStage::single_threaded(),
+        );
+
+        app.register_type::<Pickup>()
+            .register_type::<PickupSensor>()
+            .register_type::<PlayerProgress>();
+
+        app.insert_resource(PlayerProgress::default());
+
         #[cfg(feature = "devel")]
         {
             app.add_plugins(debug::DeveloperPlugins);
@@ -51,7 +68,6 @@ impl Plugin for GamePlugin {
         app.add_plugin(physics::PhysicsPlugin);
         app.add_plugin(portal::PortalPlugin);
         app.add_plugin(render::RenderPlugin);
-        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(first_person_controller::FirstPersonControllerPlugin);
         app.add_plugin(input::InputPlugin);
         app.add_plugin(asset_processor::LevelsPlugin);
@@ -63,7 +79,11 @@ impl Plugin for GamePlugin {
         )
         //.add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
         .add_system(load_level_when_ready.run_in_state(GameState::MainMenu))
-        .add_system(throw_cube);
+        .add_system(throw_cube.run_in_state(GameState::InGame))
+        .add_system_to_stage(
+            GameStages::Pickups,
+            process_pickups.run_in_state(GameState::InGame),
+        );
     }
 }
 
@@ -96,9 +116,29 @@ impl Default for PhysicsCubeBundle {
             rigidbody: RigidBody::Dynamic,
             groups: CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
             teleport: PortalTeleport,
-            ccd: Ccd::enabled(),
+            ccd: Ccd::disabled(),
         }
     }
+}
+
+#[derive(Debug, Clone, Component, Default, Reflect, FromReflect, PartialEq, Eq)]
+pub enum PlayerProgress {
+    #[default]
+    GettingStarted,
+    HasPortalGun,
+    HasImprovedPortalGun,
+}
+
+#[derive(Debug, Component, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct Pickup {
+    pub id: u32,
+}
+
+#[derive(Debug, Component, Default, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct PickupSensor {
+    pub pickup_id: u32,
 }
 
 const CUBE_SIZE: f32 = 0.2;
@@ -180,6 +220,40 @@ fn load_level_when_ready(
             }
             AssetEvent::Modified { handle: _ } => {}
             AssetEvent::Removed { handle: _ } => {}
+        }
+    }
+}
+
+fn process_pickups(
+    mut commands: Commands,
+    mut collisions: EventReader<CollisionEvent>,
+    mut sensors_query: Query<(&PickupSensor, Entity)>,
+    pickups_query: Query<(&Pickup, Entity)>,
+) {
+    for collision in collisions.iter() {
+        match collision {
+            CollisionEvent::Started(collider_a, collider_b, _flags) => {
+                let maybe_sensor_entity = sensors_query
+                    .get(*collider_a)
+                    .or_else(|_| sensors_query.get(*collider_b))
+                    .map(|r| r.1);
+                if let Ok(sensor_entity) = maybe_sensor_entity {
+                    let (sensor, sensor_entity) = sensors_query.get_mut(sensor_entity).unwrap();
+                    info!("Pickup {} activated", sensor.pickup_id);
+                    if sensor.pickup_id == 1 {
+                        commands.insert_resource(PlayerProgress::HasPortalGun);
+                    } else if sensor.pickup_id == 2 {
+                        commands.insert_resource(PlayerProgress::HasImprovedPortalGun);
+                    }
+                    for (pickup, pickup_entity) in &pickups_query {
+                        if pickup.id == sensor.pickup_id {
+                            commands.entity(pickup_entity).despawn_recursive();
+                        }
+                    }
+                    commands.entity(sensor_entity).despawn_recursive();
+                }
+            }
+            CollisionEvent::Stopped(_collider_a, _collider_b, _flags) => {}
         }
     }
 }

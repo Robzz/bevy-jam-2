@@ -23,7 +23,8 @@ pub struct DevelopmentPlugin;
 
 impl Plugin for DevelopmentPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(enable_hot_reload);
+        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default())
+            .add_startup_system(enable_hot_reload);
     }
 }
 

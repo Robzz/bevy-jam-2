@@ -34,7 +34,7 @@ use noise::{
     Fbm,
 };
 
-use super::{first_person_controller::*, physics::*};
+use super::{first_person_controller::*, game::PlayerProgress, physics::*};
 
 #[derive(Debug)]
 pub struct PortalPlugin;
@@ -117,6 +117,8 @@ impl Plugin for PortalPlugin {
                     .label(PortalLabels::TeleportEntities)
                     .after(PortalLabels::SyncCameras),
             )
+            .add_system(apply_portal_attraction.after(PortalLabels::TeleportEntities))
+            .add_system(apply_portal_repulsion.after(PortalLabels::TeleportEntities))
             .add_system(
                 animate_camera_roll
                     .label(PortalLabels::AnimateCamera)
@@ -206,7 +208,7 @@ pub struct Portal<const N: u32> {
     /// The camera which is used to render to the texture applied to this portal
     /// This camera is positioned to look at the other portal from behind, with the same relative
     /// position.
-    camera: Option<Entity>,
+    pub camera: Option<Entity>,
     linked_portal: Option<Entity>,
     orientation: PortalOrientation,
 }
@@ -510,6 +512,7 @@ fn update_main_camera(
 }
 
 /// On left click/right click, shoot a portal.
+#[allow(clippy::too_many_arguments, clippy::collapsible_if)]
 fn fire_portal<const N: u32, const OTHER: u32>(
     mut commands: Commands,
     player_query: Query<&GlobalTransform, With<FirstPersonCamera>>,
@@ -518,18 +521,21 @@ fn fire_portal<const N: u32, const OTHER: u32>(
     rapier: Res<RapierContext>,
     mouse_buttons: Res<Input<MouseButton>>,
     portal_res: Res<PortalResources>,
+    progress: Res<PlayerProgress>,
 ) {
     if let Ok(player_pos) = player_query.get_single() {
-        if mouse_buttons.just_pressed(Portal::<N>::mouse_button()) {
-            info!("Shooting portal {}", N);
-            PortalPlugin::spawn_portal(
-                &mut commands,
-                player_pos,
-                &portal_query,
-                other_portal_query.get_single().ok(),
-                &rapier,
-                &portal_res,
-            );
+        if *progress != PlayerProgress::GettingStarted {
+            if mouse_buttons.just_pressed(Portal::<N>::mouse_button()) {
+                info!("Shooting portal {}", N);
+                PortalPlugin::spawn_portal(
+                    &mut commands,
+                    player_pos,
+                    &portal_query,
+                    other_portal_query.get_single().ok(),
+                    &rapier,
+                    &portal_res,
+                );
+            }
         }
     }
 }
@@ -874,6 +880,59 @@ fn animate_camera_roll(
             let s = elapsed_total.as_secs_f32() / animation.duration.as_secs_f32();
             transform.rotation = animation.start.slerp(animation.end, s);
             animation.remaining -= time.delta();
+        }
+    }
+}
+
+const PORTAL_PHYSICS_DISTANCE: f32 = 3.;
+const PORTAL_BASE_PHYSICS_IMPULSE: f32 = 500.;
+
+fn apply_portal_attraction(
+    mut commands: Commands,
+    portal_a_query: Query<&GlobalTransform, (With<Portal<0>>, Without<Portal<1>>)>,
+    rigidbodies: Query<(&GlobalTransform, Entity), (With<RigidBody>, Without<Portal<0>>)>,
+    progress: Res<PlayerProgress>,
+) {
+    if *progress == PlayerProgress::HasImprovedPortalGun {
+        if let Ok(portal_transform) = portal_a_query.get_single() {
+            for (rb_transform, entity) in &rigidbodies {
+                let rb_to_portal = portal_transform.translation() - rb_transform.translation();
+                let distance = rb_to_portal.length();
+                if distance < PORTAL_PHYSICS_DISTANCE {
+                    commands.entity(entity).insert(ExternalImpulse {
+                        impulse: rb_to_portal.normalize() * PORTAL_BASE_PHYSICS_IMPULSE
+                            / (distance * distance),
+                        ..default()
+                    });
+                } else {
+                    commands.entity(entity).remove::<ExternalImpulse>();
+                }
+            }
+        }
+    }
+}
+
+fn apply_portal_repulsion(
+    mut commands: Commands,
+    portal_b_query: Query<&GlobalTransform, (With<Portal<1>>, Without<Portal<0>>)>,
+    rigidbodies: Query<(&GlobalTransform, Entity), (With<RigidBody>, Without<Portal<1>>)>,
+    progress: Res<PlayerProgress>,
+) {
+    if *progress == PlayerProgress::HasImprovedPortalGun {
+        if let Ok(portal_transform) = portal_b_query.get_single() {
+            for (rb_transform, entity) in &rigidbodies {
+                let portal_to_rb = rb_transform.translation() - portal_transform.translation();
+                let distance = portal_to_rb.length();
+                if distance < PORTAL_PHYSICS_DISTANCE {
+                    commands.entity(entity).insert(ExternalImpulse {
+                        impulse: portal_to_rb.normalize() * PORTAL_BASE_PHYSICS_IMPULSE
+                            / (distance * distance),
+                        ..default()
+                    });
+                } else {
+                    commands.entity(entity).remove::<ExternalImpulse>();
+                }
+            }
         }
     }
 }

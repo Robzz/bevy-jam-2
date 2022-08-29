@@ -1,5 +1,5 @@
 use bevy::{
-    gltf::{Gltf, GltfExtras, GltfNode},
+    gltf::{Gltf, GltfExtras},
     prelude::*,
     reflect::FromReflect,
     scene::SceneInstance,
@@ -14,17 +14,16 @@ use std::str::FromStr;
 use crate::plugins::{
     doors::{Door, DoorSensor},
     first_person_controller::*,
-    game::GameState,
+    game::*,
     physics::*,
     portal::PortalTeleport,
     render::RenderResources,
 };
 
-use super::{Level, SpawnState};
+use super::{level::*, SectionStart, SpawnState};
 
 pub const LEVEL_LIST: &[&str] = &["Level1"];
 
-pub const PLAYER_SPAWN_SUFFIX: &str = ".player_spawn";
 pub const LEVEL_STATIC_GEOMETRY_SUFFIX: &str = ".fixed";
 pub const LEVEL_GROUND_GEOMETRY_SUFFIX: &str = ".ground";
 pub const LEVEL_DYNAMIC_GEOMETRY_SUFFIX: &str = ".prop";
@@ -92,6 +91,21 @@ pub struct NodeExtras {
     #[serde(default)]
     #[serde(deserialize_with = "u32_from_string")]
     door: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    close_door: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    open_door: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    pickup_sensor: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    pickup: Option<u32>,
+    level_transition: Option<String>,
+    section_start: Option<String>,
+    section_finish: Option<String>,
 }
 
 fn bool_from_string<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
@@ -129,7 +143,7 @@ where
 #[derive(Debug, Default, Reflect, FromReflect)]
 pub struct CurrentLevel {
     level: Handle<Level>,
-    sublevel: String,
+    pub(crate) section: String,
 }
 
 #[allow(dead_code)]
@@ -138,8 +152,8 @@ impl CurrentLevel {
         self.level.clone()
     }
 
-    pub fn current_sublevel(&self) -> String {
-        self.sublevel.clone()
+    pub fn current_section(&self) -> String {
+        self.section.clone()
     }
 }
 
@@ -329,11 +343,66 @@ impl LevelProcessor {
                     ..default()
                 });
             }
+
+            if let (Some(level), Some(close_door), Some(open_door)) =
+                (extras.level_transition, extras.close_door, extras.open_door)
+            {
+                entity.insert(dbg!(SectionTransition {
+                    target_level: level,
+                    close_door,
+                    open_door,
+                    close_animation: gltf
+                        .named_animations
+                        .get(&dbg!(format!(
+                            "{}_{}",
+                            ANIMATION_CLOSE_DOOR_PREFIX, close_door
+                        )))
+                        .unwrap()
+                        .clone(),
+                    open_animation: gltf
+                        .named_animations
+                        .get(&dbg!(format!(
+                            "{}_{}",
+                            ANIMATION_OPEN_DOOR_PREFIX, open_door
+                        )))
+                        .unwrap()
+                        .clone(),
+                }));
+            }
+
+            if let Some(section_start) = extras.section_start {
+                entity.insert(SectionStart {
+                    section_name: section_start,
+                });
+            }
+
+            if let Some(section_end) = extras.section_finish {
+                entity.insert(SectionFinish {
+                    section_name: section_end,
+                });
+            }
+
+            if let Some(pickup) = extras.pickup {
+                entity.insert(Pickup { id: pickup });
+            }
+
+            if let Some(pickup_sensor) = extras.pickup_sensor {
+                entity.insert(PickupSensor {
+                    pickup_id: pickup_sensor,
+                });
+            }
         }
 
         let mut animator_query = scene
             .world
             .query_filtered::<Entity, With<AnimationPlayer>>();
+        for animator in scene
+            .world
+            .query_filtered::<&Name, With<AnimationPlayer>>()
+            .iter(&scene.world)
+        {
+            info!("Got animator {}", animator);
+        }
         let animator_entity = animator_query.single(&scene.world);
         scene
             .world
@@ -379,9 +448,11 @@ impl LevelProcessor {
         mut commands: Commands,
         mut level_manager: ResMut<LevelProcessor>,
         mut door_sensors_query: Query<(&Name, &mut DoorSensor, &Children, Entity)>,
+        level_transitions_query: Query<(&Name, &SectionTransition, &Children, Entity)>,
         fixed_geometry_query: Query<(&Name, &Handle<Mesh>, Option<&ColliderShape>, Entity)>,
         dynamic_geometry_query: Query<(&Name, &Children, Entity)>,
         doors_query: Query<(&Name, &Door, Entity)>,
+        pickups_sensors_query: Query<(&PickupSensor, &Children, Entity)>,
         scene_instance_query: Query<&SceneInstance>,
         scene_spawner: Res<SceneSpawner>,
         meshes: Res<Assets<Mesh>>,
@@ -400,7 +471,6 @@ impl LevelProcessor {
                             if name.ends_with(LEVEL_STATIC_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
-                                dbg!(&shape, name);
                                 commands.entity(entity).insert_bundle((
                                     CollisionGroups::new(
                                         WALLS_GROUP,
@@ -412,7 +482,6 @@ impl LevelProcessor {
                             } else if name.ends_with(LEVEL_GROUND_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
-                                dbg!(&shape, name);
                                 commands.entity(entity).insert_bundle((
                                     CollisionGroups::new(
                                         GROUND_GROUP,
@@ -442,7 +511,7 @@ impl LevelProcessor {
                                         RigidBody::Dynamic,
                                         Velocity::default(),
                                         ColliderMassProperties::Density(200.),
-                                        Ccd::enabled(),
+                                        Ccd::disabled(),
                                         collider.clone(),
                                         PortalTeleport,
                                     ));
@@ -477,6 +546,49 @@ impl LevelProcessor {
                                 sensors.push(entity);
                             }
                         }
+
+                        if let Ok((_name, _transition, children, entity)) =
+                            level_transitions_query.get(scene_entity)
+                        {
+                            if let Ok((_, mesh_handle, opt_shape, _)) =
+                                fixed_geometry_query.get(*children.first().unwrap())
+                            {
+                                info!("Creating level transition to {}", _transition.target_level);
+                                let mesh = meshes.get(mesh_handle).unwrap();
+                                let shape = opt_shape.cloned().unwrap_or_default();
+                                commands.entity(entity).insert_bundle((
+                                    RigidBody::Fixed,
+                                    Self::compute_collider(mesh, shape),
+                                    Sensor,
+                                    CollisionGroups::new(
+                                        LEVEL_TRANSITION_SENSORS_GROUP,
+                                        PLAYER_GROUP,
+                                    ),
+                                    ActiveEvents::COLLISION_EVENTS,
+                                ));
+                            }
+                        }
+
+                        if let Ok((_pickup_sensor, children, entity)) =
+                            pickups_sensors_query.get(scene_entity)
+                        {
+                            if let Ok((_, mesh_handle, opt_shape, _)) =
+                                fixed_geometry_query.get(*children.first().unwrap())
+                            {
+                                let mesh = meshes.get(mesh_handle).unwrap();
+                                let shape = opt_shape.cloned().unwrap_or_default();
+                                commands.entity(entity).insert_bundle((
+                                    RigidBody::Fixed,
+                                    Self::compute_collider(mesh, shape),
+                                    Sensor,
+                                    CollisionGroups::new(
+                                        DOOR_SENSORS_GROUP,
+                                        PLAYER_GROUP | PROPS_GROUP,
+                                    ),
+                                    ActiveEvents::COLLISION_EVENTS,
+                                ));
+                            }
+                        }
                     }
 
                     for sensor_entity in sensors {
@@ -486,7 +598,6 @@ impl LevelProcessor {
                             if let Some(sensor_doors) = doors.get(&sensor.doors_id) {
                                 sensor.door_entities = sensor_doors.clone()
                             } else {
-                                dbg!(&doors);
                                 warn!(
                                     "No doors found for sensor {} with ID {}",
                                     name, sensor.doors_id
@@ -575,17 +686,20 @@ impl LevelProcessor {
     pub(crate) fn spawn_player(
         mut commands: Commands,
         mut level_manager: ResMut<LevelProcessor>,
-        levels: Res<Assets<Level>>,
-        nodes: Res<Assets<GltfNode>>,
+        spawn_points_query: Query<(&SectionStart, &Transform)>,
     ) {
         if level_manager.spawn_state == SpawnState::Spawning {
-            let level = levels.get(&level_manager.current_level().unwrap()).unwrap();
-            let spawn_node = nodes.get(&level.player_spawns[LEVEL_LIST[0]]).unwrap();
+            let spawn_node = spawn_points_query
+                .into_iter()
+                .find(|(section, _trf)| dbg!(&section.section_name) == LEVEL_LIST[0])
+                .unwrap()
+                .1
+                .to_owned();
             let player_entity = commands
                 .spawn_bundle(FirstPersonControllerBundle {
                     spawner: FirstPersonControllerSpawner {},
                     spatial: SpatialBundle {
-                        transform: spawn_node.transform,
+                        transform: spawn_node,
                         ..default()
                     },
                 })
@@ -609,7 +723,7 @@ impl LevelProcessor {
             info!("Marking level spawn as complete, transitioning to in game state");
             commands.insert_resource(CurrentLevel {
                 level: level_manager.current_level().unwrap(),
-                sublevel: "Level1".to_owned(),
+                section: "Level1".to_owned(),
             });
             level_manager.spawn_state = SpawnState::Idle;
         }
@@ -625,18 +739,6 @@ impl LevelProcessor {
         level_name: &str,
         grids: &Res<RenderResources>,
     ) -> Handle<Level> {
-        let mut spawn_nodes = HashMap::new();
-        for (name, node) in &gltf.named_nodes {
-            if name.ends_with(PLAYER_SPAWN_SUFFIX) {
-                spawn_nodes.insert(
-                    name.strip_suffix(PLAYER_SPAWN_SUFFIX).unwrap().to_owned(),
-                    node.clone(),
-                );
-            }
-        }
-        if spawn_nodes.is_empty() {
-            panic!("The level has no player spawn point");
-        }
         let default_scene_handle = gltf.default_scene.as_ref().unwrap();
         let default_scene = scenes.get_mut(default_scene_handle).unwrap();
 
@@ -653,7 +755,6 @@ impl LevelProcessor {
                 .as_ref()
                 .expect("GLTF asset has no default scene")
                 .as_weak(),
-            spawn_nodes,
             level_name.to_owned(),
         );
         levels.add(level)
@@ -680,11 +781,11 @@ impl LevelProcessor {
                 ColliderShape::Convex => ComputedColliderShape::TriMesh,
                 ColliderShape::Concave => {
                     let vhacd_params = VHACDParameters {
-                        fill_mode: FillMode::FloodFill {
-                            detect_cavities: true,
-                        },
-                        convex_hull_approximation: true,
-                        resolution: 128,
+                        //fill_mode: FillMode::FloodFill {
+                        //detect_cavities: true,
+                        //},
+                        //convex_hull_approximation: true,
+                        //resolution: 96,
                         ..default()
                     };
                     ComputedColliderShape::ConvexDecomposition(vhacd_params)
