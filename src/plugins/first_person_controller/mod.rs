@@ -168,7 +168,13 @@ fn process_controller_inputs(
         ),
     >,
     mut prop_query: Query<
-        (&Name, &GlobalTransform, &mut Transform, &mut RigidBody, &mut CollisionGroups),
+        (
+            &Name,
+            &GlobalTransform,
+            &mut Transform,
+            &mut RigidBody,
+            &mut CollisionGroups,
+        ),
         (Without<FirstPersonController>, Without<CameraAnchor>),
     >,
     rapier: Res<RapierContext>,
@@ -274,23 +280,36 @@ fn process_controller_inputs(
                         QueryFilter::new()
                             .groups(InteractionGroups::new(RAYCAST_GROUP, PROPS_GROUP)),
                     ) {
-                        let (prop_name, _prop_global_transform, mut prop_transform, mut rigidbody, mut collision_groups) =
-                            prop_query.get_mut(entity).unwrap();
+                        let (
+                            prop_name,
+                            _prop_global_transform,
+                            mut prop_transform,
+                            mut rigidbody,
+                            mut collision_groups,
+                        ) = prop_query.get_mut(entity).unwrap();
                         info!("Found prop {} to grab {} away!", prop_name, distance);
                         prop_transform.translation = cam_transform.forward() * distance;
                         prop_transform.rotation = Quat::IDENTITY;
                         controller.grabbed_object = Some(entity);
-                        *collision_groups = CollisionGroups::new(PROPS_GROUP, WALLS_GROUP | GROUND_GROUP | DOOR_SENSORS_GROUP);
+                        *collision_groups = CollisionGroups::new(
+                            PROPS_GROUP,
+                            WALLS_GROUP | GROUND_GROUP | DOOR_SENSORS_GROUP,
+                        );
                         *rigidbody = RigidBody::KinematicPositionBased;
                         commands.entity(player_entity).add_child(entity);
                     }
                 }
             } else {
                 // Make the object dynamic again
-                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody, mut collision_groups) =
-                    prop_query
-                        .get_mut(controller.grabbed_object.unwrap())
-                        .unwrap();
+                let (
+                    prop_name,
+                    prop_global_transform,
+                    mut prop_transform,
+                    mut rigidbody,
+                    mut collision_groups,
+                ) = prop_query
+                    .get_mut(controller.grabbed_object.unwrap())
+                    .unwrap();
                 info!("Releasing prop {}", prop_name);
                 *rigidbody = RigidBody::Dynamic;
                 commands
