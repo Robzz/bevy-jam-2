@@ -1,7 +1,7 @@
 use bevy::{
     prelude::*,
     reflect::TypeUuid,
-    render::render_resource::{AsBindGroup, ShaderRef},
+    render::render_resource::{AsBindGroup, ShaderRef, ShaderType},
 };
 
 use super::PortalResources;
@@ -37,9 +37,7 @@ pub struct ClosedPortalMaterial {
     #[sampler(1)]
     pub texture: Handle<Image>,
     #[uniform(2)]
-    pub color: Color,
-    #[uniform(3)]
-    pub time: f32,
+    pub uniform: ClosedPortalUniform,
 }
 
 impl Material for ClosedPortalMaterial {
@@ -57,8 +55,14 @@ impl ClosedPortalMaterial {
         let t = time.time_since_startup().as_secs_f32();
         for mat in &resources.closed_materials {
             if let Some(mut material) = materials.get_mut(mat) {
-                material.time = t;
+                material.uniform.time = Vec4::splat(t);
             }
         }
     }
+}
+
+#[derive(Debug, Clone, ShaderType, Reflect)]
+pub struct ClosedPortalUniform {
+    pub color: Color,
+    pub time: Vec4,
 }

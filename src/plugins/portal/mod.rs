@@ -418,14 +418,18 @@ fn load_portal_assets(
     closed_mats[0] = closed_materials.add(ClosedPortalMaterial {
         texture: noise_texture.clone(),
         // Orange
-        color: Color::rgb_linear(1., 0.7, 0.2),
-        time: 0.,
+        uniform: ClosedPortalUniform {
+            color: Color::rgba(1., 0.7, 0.2, 1.),
+            time: Vec4::ZERO,
+        },
     });
     closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
         texture: noise_texture.clone(),
         // Blue
-        color: Color::rgb(0.2, 0.78, 1.),
-        time: 0.,
+        uniform: ClosedPortalUniform {
+            color: Color::rgba(0.2, 0.78, 1., 1.),
+            time: Vec4::ZERO,
+        },
     });
 
     let mut render_targets: [Handle<Image>; 2] = default();
@@ -435,6 +439,10 @@ fn load_portal_assets(
             height: 720,
             ..default()
         };
+        #[cfg(target_family = "wasm")]
+        let texture_format = TextureFormat::Rgba8UnormSrgb;
+        #[cfg(not(target_family = "wasm"))]
+        let texture_format = TextureFormat::Bgra8UnormSrgb;
         let mut image = Image {
             texture_descriptor: TextureDescriptor {
                 label: None,
@@ -442,7 +450,7 @@ fn load_portal_assets(
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: TextureFormat::Bgra8UnormSrgb,
+                format: texture_format,
                 usage: TextureUsages::TEXTURE_BINDING
                     | TextureUsages::COPY_DST
                     | TextureUsages::RENDER_ATTACHMENT,
