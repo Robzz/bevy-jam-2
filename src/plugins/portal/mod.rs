@@ -435,6 +435,10 @@ fn load_portal_assets(
             height: 720,
             ..default()
         };
+        #[cfg(target_family = "wasm")]
+        let texture_format = TextureFormat::Rgba8UnormSrgb;
+        #[cfg(not(target_family = "wasm"))]
+        let texture_format = TextureFormat::Bgra8UnormSrgb;
         let mut image = Image {
             texture_descriptor: TextureDescriptor {
                 label: None,
@@ -442,7 +446,7 @@ fn load_portal_assets(
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: TextureFormat::Bgra8UnormSrgb,
+                format: texture_format,
                 usage: TextureUsages::TEXTURE_BINDING
                     | TextureUsages::COPY_DST
                     | TextureUsages::RENDER_ATTACHMENT,
