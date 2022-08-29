@@ -6,7 +6,7 @@ use bevy::{
 };
 use bevy_rapier3d::prelude::*;
 
-use crate::plugins::{doors::Door, first_person_controller::FirstPersonController};
+use crate::plugins::{doors::Door, first_person_controller::FirstPersonController, portal::Portal};
 
 use super::{level_processor::CurrentLevel, SceneAnimationPlayer};
 
@@ -151,11 +151,14 @@ pub fn initiate_section_transition(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn perform_section_transition(
     mut commands: Commands,
     mut player_query: Query<(&mut Transform, Entity), With<FirstPersonController>>,
     mut animator_query: Query<(&Name, Option<&mut AnimationPlayer>), With<SceneAnimationPlayer>>,
     mut current_level: ResMut<CurrentLevel>,
+    portal_a_query: Query<(Option<Entity>, &Portal<0>)>,
+    portal_b_query: Query<(Option<Entity>, &Portal<1>)>,
     global_transform_query: Query<&GlobalTransform>,
     transition: Option<ResMut<PendingTransition>>,
     time: Res<Time>,
@@ -183,6 +186,24 @@ pub fn perform_section_transition(
                 ))
                 .compute_transform();
             *player = teleport_trf.mul_transform(*player);
+
+            // Delete open portals
+            //if let (Some(portal_entity), portal_a) = portal_a_query.single() {
+                //if let Some(camera) = portal_a.camera {
+                    //commands.entity(camera)
+                        //.despawn_recursive();
+                //}
+                //commands.entity(portal_entity)
+                    //.despawn_recursive();
+            //}
+            //if let (Some(portal_entity), portal_b) = portal_b_query.single() {
+                //if let Some(camera) = portal_b.camera {
+                    //commands.entity(camera)
+                        //.despawn_recursive();
+                //}
+                //commands.entity(portal_entity)
+                    //.despawn_recursive();
+            //}
         }
         if transition.timer.percent_left() < 0.1 {
             commands

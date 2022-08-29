@@ -5,7 +5,7 @@ mod level;
 mod level_processor;
 
 pub use level::*;
-pub use level_processor::{LevelProcessor, SceneAnimationPlayer};
+pub use level_processor::*;
 
 use self::level_processor::ColliderShape;
 

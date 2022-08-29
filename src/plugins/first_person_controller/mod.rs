@@ -6,7 +6,14 @@
 //!   * Crouching
 //! * Climbing slopes and stairs
 
-use bevy::{prelude::*, reflect::FromReflect, render::camera::Projection};
+use std::f32::consts::PI;
+
+use bevy::{
+    gltf::{Gltf, GltfMesh},
+    prelude::*,
+    reflect::FromReflect,
+    render::camera::Projection,
+};
 use bevy_rapier3d::prelude::*;
 use euclid::Angle;
 use iyes_loopless::condition::IntoConditionalExclusiveSystem;
@@ -14,7 +21,11 @@ use leafwing_input_manager::prelude::*;
 
 use crate::plugins::{input::default_input_map, physics::*, portal::PortalTeleport};
 
-use super::{game::GameState, input::Actions};
+use super::{
+    asset_processor::{CurrentLevel, Level},
+    game::{GameState, PlayerProgress},
+    input::Actions,
+};
 
 #[derive(Debug)]
 /// First person controller plugin, which registers the required systems to use the first person
@@ -32,7 +43,8 @@ impl Plugin for FirstPersonControllerPlugin {
             process_controller_inputs
                 .run_in_state(GameState::InGame)
                 .label(FirstPersonLabels::ProcessInputs),
-        );
+        )
+        .add_system(show_gun_on_pickup.run_in_state(GameState::InGame).label(FirstPersonLabels::ToggleGun));
     }
 }
 
@@ -41,7 +53,7 @@ impl Plugin for FirstPersonControllerPlugin {
 pub enum FirstPersonLabels {
     SpawnControllers,
     ProcessInputs,
-    //MoveGrabbedObject,
+    ToggleGun,
 }
 
 #[derive(Debug, Component)]
@@ -50,6 +62,7 @@ pub struct FirstPersonController {
     pub yaw: Angle<f32>,
     pub pitch: Angle<f32>,
     pub camera_anchor: Entity,
+    pub weapon_node: Entity,
     pub grabbed_object: Option<Entity>,
 }
 
@@ -86,6 +99,10 @@ const CAMERA_OFFSET: Vec3 = Vec3::new(0., EYE_HEIGHT - PLAYER_HEIGHT / 2., 0.);
 fn spawn_controller(
     mut commands: Commands,
     spawners_query: Query<(&FirstPersonControllerSpawner, Entity)>,
+    current_level: Res<CurrentLevel>,
+    levels: Res<Assets<Level>>,
+    gltfs: Res<Assets<Gltf>>,
+    gltf_meshes: Res<Assets<GltfMesh>>,
 ) {
     for (_spawner, id) in &spawners_query {
         let player_root = commands
@@ -111,6 +128,28 @@ fn spawn_controller(
             ))
             .id();
 
+        let level = levels.get(&current_level.get()).unwrap();
+        let gltf = gltfs.get(&level.gltf).unwrap();
+        let portal_gun_mesh = gltf_meshes
+            .get(gltf.named_meshes.get("Scene.070").unwrap())
+            .unwrap();
+        let primitive = portal_gun_mesh.primitives.first().unwrap();
+        let material = primitive.material.clone().unwrap();
+
+        let gun_entity = commands
+            .spawn_bundle(PbrBundle {
+                mesh: primitive.mesh.clone(),
+                material,
+                transform: Transform {
+                    translation: Vec3::new(0.2, -0.2, -0.6),
+                    rotation: Quat::from_rotation_y(PI),
+                    ..default()
+                },
+                visibility: Visibility { is_visible: false },
+                ..default()
+            })
+            .id();
+
         let camera_anchor = commands
             .spawn_bundle(SpatialBundle::from(Transform::from_translation(
                 CAMERA_OFFSET,
@@ -132,7 +171,9 @@ fn spawn_controller(
             .insert_bundle((Name::from("Player camera"), FirstPersonCamera))
             .id();
 
-        commands.entity(camera_anchor).push_children(&[camera]);
+        commands
+            .entity(camera_anchor)
+            .push_children(&[camera, gun_entity]);
 
         commands
             .entity(player_root)
@@ -142,6 +183,7 @@ fn spawn_controller(
                 pitch: Angle::zero(),
                 camera_anchor,
                 grabbed_object: None,
+                weapon_node: gun_entity,
             });
 
         commands.entity(id).remove::<FirstPersonControllerSpawner>();
@@ -322,6 +364,20 @@ fn process_controller_inputs(
                 *collision_groups = CollisionGroups::new(PROPS_GROUP, ALL_GROUPS);
                 prop_transform.translation = prop_global_transform.translation();
                 controller.grabbed_object = None;
+            }
+        }
+    }
+}
+
+fn show_gun_on_pickup(
+    mut visibility_query: Query<&mut Visibility>,
+    player_query: Query<&FirstPersonController>,
+    progress: Res<PlayerProgress>,
+) {
+    if *progress != PlayerProgress::GettingStarted {
+        for controller in &player_query {
+            if let Ok(mut visibility) = visibility_query.get_mut(controller.weapon_node) {
+                visibility.is_visible = true;
             }
         }
     }

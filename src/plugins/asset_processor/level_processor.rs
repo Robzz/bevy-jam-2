@@ -14,7 +14,7 @@ use std::str::FromStr;
 use crate::plugins::{
     doors::{Door, DoorSensor},
     first_person_controller::*,
-    game::GameState,
+    game::*,
     physics::*,
     portal::PortalTeleport,
     render::RenderResources,
@@ -29,6 +29,7 @@ pub const LEVEL_GROUND_GEOMETRY_SUFFIX: &str = ".ground";
 pub const LEVEL_DYNAMIC_GEOMETRY_SUFFIX: &str = ".prop";
 pub const ANIMATION_OPEN_DOOR_PREFIX: &str = "OpenDoor";
 pub const ANIMATION_CLOSE_DOOR_PREFIX: &str = "CloseDoor";
+
 
 #[derive(Debug, Component, Default, Reflect, FromReflect)]
 #[reflect(Component)]
@@ -97,6 +98,12 @@ pub struct NodeExtras {
     #[serde(default)]
     #[serde(deserialize_with = "u32_from_string")]
     open_door: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    pickup_sensor: Option<u32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u32_from_string")]
+    pickup: Option<u32>,
     level_transition: Option<String>,
     section_start: Option<String>,
     section_finish: Option<String>,
@@ -375,6 +382,16 @@ impl LevelProcessor {
                     section_name: section_end,
                 });
             }
+
+            if let Some(pickup) = extras.pickup {
+                entity.insert(Pickup { id: pickup });
+            }
+
+            if let Some(pickup_sensor) = extras.pickup_sensor {
+                entity.insert(PickupSensor {
+                    pickup_id: pickup_sensor,
+                });
+            }
         }
 
         let mut animator_query = scene
@@ -436,6 +453,7 @@ impl LevelProcessor {
         fixed_geometry_query: Query<(&Name, &Handle<Mesh>, Option<&ColliderShape>, Entity)>,
         dynamic_geometry_query: Query<(&Name, &Children, Entity)>,
         doors_query: Query<(&Name, &Door, Entity)>,
+        pickups_sensors_query: Query<(&PickupSensor, &Children, Entity)>,
         scene_instance_query: Query<&SceneInstance>,
         scene_spawner: Res<SceneSpawner>,
         meshes: Res<Assets<Mesh>>,
@@ -546,6 +564,25 @@ impl LevelProcessor {
                                     CollisionGroups::new(
                                         LEVEL_TRANSITION_SENSORS_GROUP,
                                         PLAYER_GROUP,
+                                    ),
+                                    ActiveEvents::COLLISION_EVENTS,
+                                ));
+                            }
+                        }
+
+                        if let Ok((_pickup_sensor, children, entity)) = pickups_sensors_query.get(scene_entity) {
+                            if let Ok((_, mesh_handle, opt_shape, _)) =
+                                fixed_geometry_query.get(*children.first().unwrap())
+                            {
+                                let mesh = meshes.get(mesh_handle).unwrap();
+                                let shape = opt_shape.cloned().unwrap_or_default();
+                                commands.entity(entity).insert_bundle((
+                                    RigidBody::Fixed,
+                                    Self::compute_collider(mesh, shape),
+                                    Sensor,
+                                    CollisionGroups::new(
+                                        DOOR_SENSORS_GROUP,
+                                        PLAYER_GROUP | PROPS_GROUP,
                                     ),
                                     ActiveEvents::COLLISION_EVENTS,
                                 ));
@@ -747,7 +784,7 @@ impl LevelProcessor {
                         //detect_cavities: true,
                         //},
                         //convex_hull_approximation: true,
-                        //resolution: 128,
+                        //resolution: 96,
                         ..default()
                     };
                     ComputedColliderShape::ConvexDecomposition(vhacd_params)
