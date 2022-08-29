@@ -51,7 +51,6 @@ impl Plugin for GamePlugin {
         app.add_plugin(physics::PhysicsPlugin);
         app.add_plugin(portal::PortalPlugin);
         app.add_plugin(render::RenderPlugin);
-        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(first_person_controller::FirstPersonControllerPlugin);
         app.add_plugin(input::InputPlugin);
         app.add_plugin(asset_processor::LevelsPlugin);
@@ -96,7 +95,7 @@ impl Default for PhysicsCubeBundle {
             rigidbody: RigidBody::Dynamic,
             groups: CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
             teleport: PortalTeleport,
-            ccd: Ccd::enabled(),
+            ccd: Ccd::disabled(),
         }
     }
 }

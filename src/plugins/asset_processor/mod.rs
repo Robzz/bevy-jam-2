@@ -4,7 +4,7 @@ use iyes_loopless::{prelude::*, state::StateTransitionStageLabel};
 mod level;
 mod level_processor;
 
-pub use level::Level;
+pub use level::*;
 pub use level_processor::{LevelProcessor, SceneAnimationPlayer};
 
 use self::level_processor::ColliderShape;
@@ -27,6 +27,9 @@ impl Plugin for LevelsPlugin {
     fn build(&self, app: &mut App) {
         app.add_asset::<Level>();
         app.register_type::<SceneAnimationPlayer>()
+            .register_type::<SectionTransition>()
+            .register_type::<SectionStart>()
+            .register_type::<SectionFinish>()
             .register_type::<ColliderShape>();
         app.insert_resource(LevelProcessor::new());
 
@@ -71,6 +74,20 @@ impl Plugin for LevelsPlugin {
 
         app.add_system(LevelProcessor::gltf_asset_event_listener);
         app.add_system(LevelProcessor::check_level_loading_progress);
+
+        app.add_enter_system(GameState::InGame, init_section_table);
+
+        app.add_system(
+            initiate_section_transition
+                .run_in_state(GameState::InGame)
+                .label(SectionTransitionLabels::InitiateTransition),
+        );
+        app.add_system(
+            perform_section_transition
+                .run_in_state(GameState::InGame)
+                .label(SectionTransitionLabels::PerformTransition)
+                .after(SectionTransitionLabels::InitiateTransition),
+        );
     }
 }
 
