@@ -168,7 +168,7 @@ fn process_controller_inputs(
         ),
     >,
     mut prop_query: Query<
-        (&Name, &GlobalTransform, &mut Transform, &mut RigidBody),
+        (&Name, &GlobalTransform, &mut Transform, &mut RigidBody, &mut CollisionGroups),
         (Without<FirstPersonController>, Without<CameraAnchor>),
     >,
     rapier: Res<RapierContext>,
@@ -274,19 +274,20 @@ fn process_controller_inputs(
                         QueryFilter::new()
                             .groups(InteractionGroups::new(RAYCAST_GROUP, PROPS_GROUP)),
                     ) {
-                        let (prop_name, _prop_global_transform, mut prop_transform, mut rigidbody) =
+                        let (prop_name, _prop_global_transform, mut prop_transform, mut rigidbody, mut collision_groups) =
                             prop_query.get_mut(entity).unwrap();
                         info!("Found prop {} to grab {} away!", prop_name, distance);
                         prop_transform.translation = cam_transform.forward() * distance;
                         prop_transform.rotation = Quat::IDENTITY;
                         controller.grabbed_object = Some(entity);
+                        *collision_groups = CollisionGroups::new(PROPS_GROUP, WALLS_GROUP | GROUND_GROUP | DOOR_SENSORS_GROUP);
                         *rigidbody = RigidBody::KinematicPositionBased;
                         commands.entity(player_entity).add_child(entity);
                     }
                 }
             } else {
                 // Make the object dynamic again
-                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody) =
+                let (prop_name, prop_global_transform, mut prop_transform, mut rigidbody, mut collision_groups) =
                     prop_query
                         .get_mut(controller.grabbed_object.unwrap())
                         .unwrap();
@@ -295,6 +296,7 @@ fn process_controller_inputs(
                 commands
                     .entity(player_entity)
                     .remove_children(&[controller.grabbed_object.unwrap()]);
+                *collision_groups = CollisionGroups::new(PROPS_GROUP, ALL_GROUPS);
                 prop_transform.translation = prop_global_transform.translation();
                 controller.grabbed_object = None;
             }

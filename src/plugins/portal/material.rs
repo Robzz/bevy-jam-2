@@ -39,7 +39,7 @@ pub struct ClosedPortalMaterial {
     #[uniform(2)]
     pub color: Color,
     #[uniform(3)]
-    pub time: f32,
+    pub time: Vec4,
 }
 
 impl Material for ClosedPortalMaterial {
@@ -57,7 +57,7 @@ impl ClosedPortalMaterial {
         let t = time.time_since_startup().as_secs_f32();
         for mat in &resources.closed_materials {
             if let Some(mut material) = materials.get_mut(mat) {
-                material.time = t;
+                material.time = Vec4::splat(t);
             }
         }
     }

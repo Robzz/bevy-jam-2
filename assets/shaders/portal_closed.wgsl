@@ -12,14 +12,14 @@ var texture_sampler: sampler;
 @group(1) @binding(2)
 var<uniform> portal_color: vec4<f32>;
 @group(1) @binding(3)
-var<uniform> time: f32;
+var<uniform> time: vec4<f32>;
 
 @fragment
 fn fragment(
     @builtin(position) position: vec4<f32>,
     #import bevy_pbr::mesh_vertex_output
 ) -> @location(0) vec4<f32> {
-    let varying_uvs = vec2(fract(1. - pow((2. * uv.x) - 1., 2.) + time), 1. - uv.y);
+    let varying_uvs = vec2(fract(1. - pow((2. * uv.x) - 1., 2.) + time.x), 1. - uv.y);
     let i = textureSample(texture, texture_sampler, varying_uvs).r;
     let color = vec4(i * portal_color.rgb, 1.);
     return color;

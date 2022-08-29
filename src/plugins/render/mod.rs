@@ -32,7 +32,7 @@ pub struct GridMaterial {
     #[sampler(1)]
     pub texture: Handle<Image>,
     #[uniform(2)]
-    pub grid_strength: f32,
+    pub grid_strength: Vec4,
     #[uniform(3)]
     pub base_color: Color,
 }
@@ -51,7 +51,7 @@ fn load_render_textures(
     let grid_texture = assets.load("textures/PolygonPrototype_Texture_Grid_01.png");
     let default_grid = grids.add(GridMaterial {
         texture: grid_texture.clone(),
-        grid_strength: 1.0,
+        grid_strength: Vec4::ONE,
         base_color: Color::GRAY,
     });
     commands.insert_resource(RenderResources {

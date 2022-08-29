@@ -5,7 +5,7 @@ var texture: texture_2d<f32>;
 @group(1) @binding(1)
 var texture_sampler: sampler;
 @group(1) @binding(2)
-var<uniform> grid_strength: f32;
+var<uniform> grid_strength: vec4<f32>;
 @group(1) @binding(3)
 var<uniform> base_color: vec4<f32>;
 
