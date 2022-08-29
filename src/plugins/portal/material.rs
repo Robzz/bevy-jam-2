@@ -37,7 +37,7 @@ pub struct ClosedPortalMaterial {
     #[sampler(1)]
     pub texture: Handle<Image>,
     #[uniform(2)]
-    pub uniform: ClosedPortalUniform
+    pub uniform: ClosedPortalUniform,
 }
 
 impl Material for ClosedPortalMaterial {
@@ -64,5 +64,5 @@ impl ClosedPortalMaterial {
 #[derive(Debug, Clone, ShaderType, Reflect)]
 pub struct ClosedPortalUniform {
     pub color: Color,
-    pub time: Vec4
+    pub time: Vec4,
 }

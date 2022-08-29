@@ -429,7 +429,7 @@ fn load_portal_assets(
         uniform: ClosedPortalUniform {
             color: Color::rgba(0.2, 0.78, 1., 1.),
             time: Vec4::ZERO,
-        }
+        },
     });
 
     let mut render_targets: [Handle<Image>; 2] = default();

@@ -680,7 +680,9 @@ impl LevelProcessor {
                 ColliderShape::Convex => ComputedColliderShape::TriMesh,
                 ColliderShape::Concave => {
                     let vhacd_params = VHACDParameters {
-                        fill_mode: FillMode::FloodFill { detect_cavities: true },
+                        fill_mode: FillMode::FloodFill {
+                            detect_cavities: true,
+                        },
                         convex_hull_approximation: true,
                         resolution: 128,
                         ..default()

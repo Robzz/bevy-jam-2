@@ -38,7 +38,7 @@ pub struct GridMaterial {
     #[sampler(1)]
     pub texture: Handle<Image>,
     #[uniform(2)]
-    pub grid_params: GridUniform
+    pub grid_params: GridUniform,
 }
 
 impl Material for GridMaterial {
@@ -58,7 +58,7 @@ fn load_render_textures(
         grid_params: GridUniform {
             grid_strength: Vec4::ONE,
             base_color: Color::rgba(0.5, 0.5, 0.5, 1.),
-        }
+        },
     });
     commands.insert_resource(RenderResources {
         grid_texture,
