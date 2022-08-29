@@ -7,7 +7,8 @@ pub const PORTAL_GROUP: u32 = 0b0000_0100;
 pub const PLAYER_GROUP: u32 = 0b0000_1000;
 pub const RAYCAST_GROUP: u32 = 0b0001_0000;
 pub const GROUND_GROUP: u32 = 0b0010_0000;
-pub const ALL_GROUPS: u32 = 0b0011_1111;
+pub const DOOR_SENSORS_GROUP: u32 = 0b0100_0000;
+pub const ALL_GROUPS: u32 = 0b0111_1111;
 
 pub struct PhysicsPlugin;
 

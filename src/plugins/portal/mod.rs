@@ -21,7 +21,6 @@ use bevy::{
     },
     transform::TransformSystem,
 };
-use bevy_prototype_debug_lines::DebugLines;
 use bevy_rapier3d::prelude::*;
 
 mod camera_projection;
@@ -558,13 +557,6 @@ fn create_portal_cameras<const N: u32>(
                         visibility: Visibility::visible(),
                         ..default()
                     })
-                    .with_children(|camera| {
-                        camera.spawn_bundle(PbrBundle {
-                            mesh: portal_res.dbg_sphere_mesh.clone(),
-                            material: portal_res.dbg_material.clone(),
-                            ..default()
-                        });
-                    })
                     .id(),
             );
         }
@@ -637,7 +629,6 @@ fn sync_portal_cameras(
         (&mut Transform, &mut PortalCameraProjection),
         (With<PortalCamera<1>>, Without<PortalCamera<0>>),
     >,
-    mut lines: ResMut<DebugLines>,
 ) {
     if let (
         Ok(trf_a),
@@ -672,16 +663,6 @@ fn sync_portal_cameras(
         proj_a.near *= d;
         let d = proj_b.near.xyz().length_recip();
         proj_b.near *= d;
-
-        #[cfg(feature = "devel")]
-        {
-            super::debug::draw::draw_camera_frustum_infinite_reverse(
-                &cam_a_trf, &proj_a, &mut lines,
-            );
-            super::debug::draw::draw_camera_frustum_infinite_reverse(
-                &cam_b_trf, &proj_b, &mut lines,
-            );
-        }
     }
 }
 

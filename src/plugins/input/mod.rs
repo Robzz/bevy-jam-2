@@ -24,6 +24,7 @@ pub enum Actions {
     ShootB,
     ShootCube,
     Jump,
+    Grab,
 }
 
 pub fn default_input_map() -> InputMap<Actions> {
@@ -32,7 +33,7 @@ pub fn default_input_map() -> InputMap<Actions> {
         (KeyCode::S, Actions::Backwards),
         (KeyCode::Q, Actions::StrafeLeft),
         (KeyCode::D, Actions::StrafeRight),
-        (KeyCode::F, Actions::ShootCube),
+        (KeyCode::F, Actions::Grab),
         (KeyCode::LShift, Actions::Sprint),
         (KeyCode::Space, Actions::Jump),
     ]);

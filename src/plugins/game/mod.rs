@@ -1,15 +1,13 @@
-use std::f32::consts::*;
-
-use crate::{plugins::*, util::scenes::make_test_arena};
+use crate::plugins::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
 
 use super::{
-    first_person_controller::{
-        FirstPersonCamera, FirstPersonController, FirstPersonControllerBundle,
-    },
+    asset_processor::{Level, LevelProcessor},
+    first_person_controller::{FirstPersonCamera, FirstPersonController},
     input::Actions,
     physics::*,
     portal::PortalTeleport,
@@ -19,6 +17,19 @@ use super::{
 const CROSSHAIR_SPRITE: &str = "crosshair.png";
 // endregion: --- Game Constants
 
+/// The different possible states of the game application.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum GameState {
+    /// Player is in the main menu, or in a submenu.
+    MainMenu,
+    /// A level is currently loading.
+    Loading,
+    /// The player is in game.
+    InGame,
+    // The game is currently paused.
+    //Paused
+}
+
 #[derive(Debug)]
 /// Main game plugin, responsible for loading the other game plugins and bootstrapping the game.
 pub struct GamePlugin;
@@ -27,24 +38,31 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(DefaultPlugins);
 
+        app.add_loopless_state(GameState::MainMenu);
+        app.add_startup_system(game_startup);
+
         #[cfg(feature = "devel")]
         {
             app.add_plugins(debug::DeveloperPlugins);
         }
 
         app.add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
+        app.add_plugin(doors::DoorsPlugin);
         app.add_plugin(physics::PhysicsPlugin);
         app.add_plugin(portal::PortalPlugin);
+        app.add_plugin(render::RenderPlugin);
         app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
         app.add_plugin(first_person_controller::FirstPersonControllerPlugin);
         app.add_plugin(input::InputPlugin);
+        app.add_plugin(asset_processor::LevelsPlugin);
 
         app.add_startup_system_set(
             SystemSet::new()
-                .with_system(setup)
+                .with_system(game_startup)
                 .with_system(init_resources),
         )
-        .add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
+        //.add_startup_system_to_stage(StartupStage::PostStartup, crosshair)
+        .add_system(load_level_when_ready.run_in_state(GameState::MainMenu))
         .add_system(throw_cube);
     }
 }
@@ -106,42 +124,6 @@ fn init_resources(
     });
 }
 
-/// Perform game initialization
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    //asset_server: Res<AssetServer>
-) {
-    make_test_arena(&mut commands, &mut meshes, &mut materials, 20., 5.);
-
-    // Light
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::ANTIQUE_WHITE,
-            illuminance: 20_000.,
-            shadows_enabled: true,
-            ..default()
-        },
-        transform: Transform {
-            translation: Vec3::Y * 5.,
-            rotation: Quat::from_euler(EulerRot::YXZ, FRAC_PI_4, FRAC_PI_4, 0.),
-            scale: Vec3::ONE,
-        },
-        ..default()
-    });
-
-    // Player
-    commands.spawn_bundle(FirstPersonControllerBundle {
-        spatial: SpatialBundle {
-            // The controller uses the center of mass as a reference
-            transform: Transform::from_xyz(0., 1., 0.),
-            ..default()
-        },
-        ..default()
-    });
-}
-
 /// Throw a physically driven cube in front of the player.
 fn throw_cube(
     mut commands: Commands,
@@ -170,14 +152,34 @@ fn throw_cube(
     }
 }
 
-fn crosshair(mut commands: Commands, res: Res<GameResources>) {
-    // crosshair
-    commands.spawn_bundle(SpriteBundle {
-        texture: res.crosshair.clone(),
-        transform: Transform {
-            scale: Vec3::new(5., 5., 1.),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+pub const LOBBY_LEVEL_NAME: &str = "lobby";
+pub const LOBBY_LEVEL_FILE: &str = "levels/level1.glb";
+
+/// Perform game initialization
+fn game_startup(assets: Res<AssetServer>, mut level_manager: ResMut<LevelProcessor>) {
+    level_manager.load_level(LOBBY_LEVEL_FILE, LOBBY_LEVEL_NAME.to_owned(), &assets);
+}
+
+fn load_level_when_ready(
+    mut commands: Commands,
+    mut level_events: EventReader<AssetEvent<Level>>,
+    mut level_manager: ResMut<LevelProcessor>,
+    levels: Res<Assets<Level>>,
+    mut loaded: Local<bool>,
+) {
+    for event in level_events.iter() {
+        match event {
+            AssetEvent::Created { handle } => {
+                let level = levels.get(handle).unwrap();
+                if level.name == LOBBY_LEVEL_NAME {
+                    level_manager
+                        .instantiate_level(&mut commands, LOBBY_LEVEL_NAME)
+                        .expect("Can not instantiate level");
+                    *loaded = true;
+                }
+            }
+            AssetEvent::Modified { handle: _ } => {}
+            AssetEvent::Removed { handle: _ } => {}
+        }
+    }
 }
