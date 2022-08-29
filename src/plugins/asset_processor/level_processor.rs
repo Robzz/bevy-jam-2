@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer};
 use std::str::FromStr;
 
 use crate::plugins::{
-    doors::{Door, DoorAnimations, DoorSensor, DoorSidedness},
+    doors::{Door, DoorSensor, DoorSidedness},
     first_person_controller::*,
     game::GameState,
     physics::*,
@@ -28,6 +28,8 @@ pub const PLAYER_SPAWN_SUFFIX: &str = ".player_spawn";
 pub const LEVEL_STATIC_GEOMETRY_SUFFIX: &str = ".fixed";
 pub const LEVEL_GROUND_GEOMETRY_SUFFIX: &str = ".ground";
 pub const LEVEL_DYNAMIC_GEOMETRY_SUFFIX: &str = ".prop";
+pub const ANIMATION_OPEN_DOOR_PREFIX: &str = "OpenDoor";
+pub const ANIMATION_CLOSE_DOOR_PREFIX: &str = "CloseDoor";
 
 #[derive(Debug, Component, Default, Reflect, FromReflect)]
 #[reflect(Component)]
@@ -285,13 +287,6 @@ impl LevelProcessor {
 
     /// Modify the visibility components of nodes and add door trigger components.
     pub(crate) fn preprocess_nodes(scene: &mut Scene, gltf: &Gltf) {
-        let door_animations = DoorAnimations {
-            close_left: gltf.named_animations.get("Close").unwrap().clone(),
-            close_right: gltf.named_animations.get("Close").unwrap().clone(),
-            open_left: gltf.named_animations.get("Open").unwrap().clone(),
-            open_right: gltf.named_animations.get("Open").unwrap().clone(),
-        };
-
         let mut nodes_query = scene
             .world
             .query_filtered::<(&GltfExtras, Entity), (With<Transform>, Without<Handle<Mesh>>)>();
@@ -320,16 +315,8 @@ impl LevelProcessor {
                 entity.insert(Door {
                     id: door_id,
                     sidedness: door_sidedness,
-                    animation_open: if door_sidedness == DoorSidedness::Left {
-                        door_animations.open_left.clone()
-                    } else {
-                        door_animations.open_right.clone()
-                    },
-                    animation_close: if door_sidedness == DoorSidedness::Left {
-                        door_animations.close_left.clone()
-                    } else {
-                        door_animations.close_right.clone()
-                    },
+                    animation_open: gltf.named_animations.get(&format!("{}_{}", ANIMATION_OPEN_DOOR_PREFIX, door_id)).unwrap().clone(),
+                    animation_close: gltf.named_animations.get(&format!("{}_{}", ANIMATION_CLOSE_DOOR_PREFIX, door_id)).unwrap().clone(),
                     ..default()
                 });
             }
@@ -417,6 +404,7 @@ impl LevelProcessor {
                                     let collider = colliders
                                         .entry(mesh_handle.id)
                                         .or_insert_with(|| Self::compute_collider(mesh, ColliderShape::Concave));
+                                        //.or_insert_with(|| Self::compute_collider(mesh, opt_shape.cloned().unwrap_or(ColliderShape::Concave)));
                                     commands.entity(entity).insert_bundle((
                                         CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
                                         RigidBody::Dynamic,
