@@ -21,7 +21,6 @@ use bevy::{
     },
     transform::TransformSystem,
 };
-use bevy_prototype_debug_lines::DebugLines;
 use bevy_rapier3d::prelude::*;
 
 mod camera_projection;
@@ -630,7 +629,6 @@ fn sync_portal_cameras(
         (&mut Transform, &mut PortalCameraProjection),
         (With<PortalCamera<1>>, Without<PortalCamera<0>>),
     >,
-    mut lines: ResMut<DebugLines>,
 ) {
     if let (
         Ok(trf_a),

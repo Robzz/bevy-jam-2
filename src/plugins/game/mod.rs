@@ -1,6 +1,5 @@
-use std::f32::consts::*;
 
-use crate::{plugins::*, util::scenes::make_test_arena};
+use crate::plugins::*;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
@@ -9,7 +8,7 @@ use leafwing_input_manager::prelude::ActionState;
 
 use super::{
     first_person_controller::{
-        FirstPersonCamera, FirstPersonController, FirstPersonControllerBundle,
+        FirstPersonCamera, FirstPersonController
     },
     input::Actions,
     physics::*,
@@ -29,8 +28,8 @@ pub enum GameState {
     Loading,
     /// The player is in game.
     InGame,
-    /// The game is currently paused.
-    Paused
+    // The game is currently paused.
+    //Paused
 }
 
 #[derive(Debug)]

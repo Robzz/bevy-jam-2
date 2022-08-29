@@ -50,7 +50,7 @@ pub(crate) struct MeshExtras {
     #[serde(deserialize_with = "bool_from_string")]
     grid: Option<bool>,
     #[serde(default)]
-    shape: Option<ColliderShape>
+    shape: Option<ColliderShape>,
 }
 
 #[derive(Debug, Component, Clone, Deserialize, Default, Reflect, FromReflect)]
@@ -59,14 +59,14 @@ pub(crate) struct MeshExtras {
 pub enum ColliderShape {
     #[default]
     Convex,
-    Concave
+    Concave,
 }
 
 #[derive(Debug, Clone, Deserialize, Default, Reflect, FromReflect)]
 enum ExtrasAlphaMode {
     #[default]
     Opaque,
-    Blend
+    Blend,
 }
 
 impl From<ExtrasAlphaMode> for AlphaMode {
@@ -238,14 +238,18 @@ impl LevelProcessor {
     }
 
     /// Modify the alpha blending attribute of standard materials.
-    pub(crate) fn preprocess_materials(scene: &mut Scene, materials: &mut ResMut<Assets<StandardMaterial>>) {
-        let mut query = scene.world.query::<(&Handle<StandardMaterial>, &GltfExtras)>();
+    pub(crate) fn preprocess_materials(
+        scene: &mut Scene,
+        materials: &mut ResMut<Assets<StandardMaterial>>,
+    ) {
+        let mut query = scene
+            .world
+            .query::<(&Handle<StandardMaterial>, &GltfExtras)>();
         for (material_handle, extras) in query.iter(&scene.world) {
             if let Ok(tags) = serde_json::from_str::<MaterialExtras>(&extras.value) {
                 if let Some(alpha) = tags.alpha {
                     let material = materials.get_mut(material_handle).unwrap();
                     material.alpha_mode = alpha.into();
-
                 }
             }
         }
@@ -315,16 +319,28 @@ impl LevelProcessor {
                 entity.insert(Door {
                     id: door_id,
                     sidedness: door_sidedness,
-                    animation_open: gltf.named_animations.get(&format!("{}_{}", ANIMATION_OPEN_DOOR_PREFIX, door_id)).unwrap().clone(),
-                    animation_close: gltf.named_animations.get(&format!("{}_{}", ANIMATION_CLOSE_DOOR_PREFIX, door_id)).unwrap().clone(),
+                    animation_open: gltf
+                        .named_animations
+                        .get(&format!("{}_{}", ANIMATION_OPEN_DOOR_PREFIX, door_id))
+                        .unwrap()
+                        .clone(),
+                    animation_close: gltf
+                        .named_animations
+                        .get(&format!("{}_{}", ANIMATION_CLOSE_DOOR_PREFIX, door_id))
+                        .unwrap()
+                        .clone(),
                     ..default()
                 });
             }
         }
 
-        let mut animator_query = scene.world.query_filtered::<Entity, With<AnimationPlayer>>();
+        let mut animator_query = scene
+            .world
+            .query_filtered::<Entity, With<AnimationPlayer>>();
         let animator_entity = animator_query.single(&scene.world);
-        scene.world.entity_mut(animator_entity)
+        scene
+            .world
+            .entity_mut(animator_entity)
             .insert(SceneAnimationPlayer);
     }
 
@@ -346,8 +362,13 @@ impl LevelProcessor {
                         continue;
                     }
                     if let Some(_level) = level_manager.loaded_levels_gltfs.get(handle) {
-                        let mut gltf = gltfs.get_mut(handle).unwrap();
-                        Self::update_level_on_gltf_reload(&mut scenes, &mut materials, &grids, &mut gltf);
+                        let gltf = gltfs.get_mut(handle).unwrap();
+                        Self::update_level_on_gltf_reload(
+                            &mut scenes,
+                            &mut materials,
+                            &grids,
+                            gltf,
+                        );
                         level_manager.hot_reloaded.insert(handle.to_owned());
                     }
                 }
@@ -356,6 +377,7 @@ impl LevelProcessor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn postprocess_scene(
         mut commands: Commands,
         mut level_manager: ResMut<LevelProcessor>,
@@ -374,37 +396,48 @@ impl LevelProcessor {
                     let mut doors = HashMap::new();
                     let mut sensors = Vec::new();
                     for scene_entity in scene_spawner.iter_instance_entities(**scene_id).unwrap() {
-                        for (name, mesh_handle, opt_shape, entity) in fixed_geometry_query.get(scene_entity) {
+                        if let Ok((name, mesh_handle, opt_shape, entity)) =
+                            fixed_geometry_query.get(scene_entity)
+                        {
                             let shape = opt_shape.cloned().unwrap_or_default();
                             if name.ends_with(LEVEL_STATIC_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
                                 commands.entity(entity).insert_bundle((
-                                    CollisionGroups::new(WALLS_GROUP, ALL_GROUPS - DOOR_SENSORS_GROUP),
+                                    CollisionGroups::new(
+                                        WALLS_GROUP,
+                                        ALL_GROUPS - DOOR_SENSORS_GROUP,
+                                    ),
                                     RigidBody::Fixed,
-                                    Self::compute_collider(&mesh, shape)
+                                    Self::compute_collider(mesh, shape),
                                 ));
                             } else if name.ends_with(LEVEL_GROUND_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
                                 commands.entity(entity).insert_bundle((
-                                    CollisionGroups::new(GROUND_GROUP, ALL_GROUPS - DOOR_SENSORS_GROUP),
+                                    CollisionGroups::new(
+                                        GROUND_GROUP,
+                                        ALL_GROUPS - DOOR_SENSORS_GROUP,
+                                    ),
                                     RigidBody::Fixed,
-                                    Self::compute_collider(&mesh, shape)
+                                    Self::compute_collider(mesh, shape),
                                 ));
                             }
                         }
 
-                        for (name, children, entity) in dynamic_geometry_query.get(scene_entity) {
+                        if let Ok((name, children, entity)) =
+                            dynamic_geometry_query.get(scene_entity)
+                        {
                             if name.ends_with(LEVEL_DYNAMIC_GEOMETRY_SUFFIX) {
-                                if let Ok((_name, mesh_handle, opt_shape, _entity)) =
+                                if let Ok((_name, mesh_handle, _opt_shape, _entity)) =
                                     fixed_geometry_query.get(*children.first().unwrap())
                                 {
                                     let mesh = meshes.get(mesh_handle).unwrap();
-                                    let collider = colliders
-                                        .entry(mesh_handle.id)
-                                        .or_insert_with(|| Self::compute_collider(mesh, ColliderShape::Concave));
-                                        //.or_insert_with(|| Self::compute_collider(mesh, opt_shape.cloned().unwrap_or(ColliderShape::Concave)));
+                                    let collider =
+                                        colliders.entry(mesh_handle.id).or_insert_with(|| {
+                                            Self::compute_collider(mesh, ColliderShape::Concave)
+                                        });
+                                    //.or_insert_with(|| Self::compute_collider(mesh, opt_shape.cloned().unwrap_or(ColliderShape::Concave)));
                                     commands.entity(entity).insert_bundle((
                                         CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
                                         RigidBody::Dynamic,
@@ -420,11 +453,11 @@ impl LevelProcessor {
                             }
                         }
 
-                        for (_name, door, entity) in doors_query.get(scene_entity) {
+                        if let Ok((_name, door, entity)) = doors_query.get(scene_entity) {
                             doors.entry(door.id).or_insert_with(Vec::new).push(entity);
                         }
 
-                        for (_name, _sensor, children, entity) in
+                        if let Ok((_name, _sensor, children, entity)) =
                             door_sensors_query.get_mut(scene_entity)
                         {
                             if let Ok((_, mesh_handle, opt_shape, _)) =
@@ -434,7 +467,7 @@ impl LevelProcessor {
                                 let shape = opt_shape.cloned().unwrap_or_default();
                                 commands.entity(entity).insert_bundle((
                                     RigidBody::Fixed,
-                                    Self::compute_collider(&mesh, shape),
+                                    Self::compute_collider(mesh, shape),
                                     Sensor,
                                     CollisionGroups::new(
                                         DOOR_SENSORS_GROUP,
@@ -513,23 +546,20 @@ impl LevelProcessor {
             let mut loaded_levels = Vec::new();
 
             for (level_name, level_gltf) in &level_manager.loading_levels {
-                match asset_server.get_load_state(level_gltf) {
-                    bevy::asset::LoadState::Loaded => {
-                        let mut gltf = gltfs
-                            .get_mut(level_gltf)
-                            .expect("Wasn't able to obtain GLTF though Bevy says it's loaded");
-                        let level = Self::process_gltf_levels(
-                            &mut levels,
-                            &mut scenes,
-                            &mut materials,
-                            &mut gltf,
-                            level_gltf,
-                            level_name,
-                            &grid_materials,
-                        );
-                        loaded_levels.push((level_name.to_owned(), level, level_gltf.to_owned()));
-                    }
-                    _ => {}
+                if asset_server.get_load_state(level_gltf) == bevy::asset::LoadState::Loaded {
+                    let gltf = gltfs
+                        .get_mut(level_gltf)
+                        .expect("Wasn't able to obtain GLTF though Bevy says it's loaded");
+                    let level = Self::process_gltf_levels(
+                        &mut levels,
+                        &mut scenes,
+                        &mut materials,
+                        gltf,
+                        level_gltf,
+                        level_name,
+                        &grid_materials,
+                    );
+                    loaded_levels.push((level_name.to_owned(), level, level_gltf.to_owned()));
                 }
             }
 
@@ -556,7 +586,7 @@ impl LevelProcessor {
                 .spawn_bundle(FirstPersonControllerBundle {
                     spawner: FirstPersonControllerSpawner {},
                     spatial: SpatialBundle {
-                        transform: spawn_node.transform.clone(),
+                        transform: spawn_node.transform,
                         ..default()
                     },
                 })
@@ -613,7 +643,7 @@ impl LevelProcessor {
 
         // Add required components to the entities in the scene's world based on the GltfExtras
         Self::preprocess_point_lights(default_scene);
-        Self::preprocess_nodes(default_scene, &gltf);
+        Self::preprocess_nodes(default_scene, gltf);
         Self::preprocess_meshes(default_scene, grids);
         Self::preprocess_materials(default_scene, materials);
         let level = Level::new(
@@ -639,7 +669,7 @@ impl LevelProcessor {
         let default_scene_handle = gltf.default_scene.as_ref().unwrap();
         let default_scene = scenes.get_mut(default_scene_handle).unwrap();
         Self::preprocess_point_lights(default_scene);
-        Self::preprocess_nodes(default_scene, &gltf);
+        Self::preprocess_nodes(default_scene, gltf);
         Self::preprocess_meshes(default_scene, grids);
         Self::preprocess_materials(default_scene, materials);
     }
@@ -649,8 +679,10 @@ impl LevelProcessor {
             mesh,
             &match shape {
                 ColliderShape::Convex => ComputedColliderShape::TriMesh,
-                ColliderShape::Concave => ComputedColliderShape::ConvexDecomposition(VHACDParameters::default()),
-            }
+                ColliderShape::Concave => {
+                    ComputedColliderShape::ConvexDecomposition(VHACDParameters::default())
+                }
+            },
         )
         .unwrap()
     }

@@ -5,6 +5,7 @@ use bevy::{
 
 #[derive(Debug, TypeUuid)]
 #[uuid = "731c8e90-b2ea-4f05-b7cd-b694101e5a7c"]
+#[allow(dead_code)]
 pub struct Level {
     pub(crate) gltf: Handle<Gltf>,
     pub(crate) scene: Handle<Scene>,

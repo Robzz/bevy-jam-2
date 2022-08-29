@@ -300,16 +300,3 @@ fn process_controller_inputs(
         }
     }
 }
-
-fn move_grabbed_object(
-    player_query: Query<&FirstPersonController>,
-    grabbed_prop_query: Query<&mut Transform, Without<CameraAnchor>>,
-    camera_anchor_query: Query<&mut GlobalTransform, With<CameraAnchor>>,
-) {
-    if let Ok(player) = player_query.get_single() {
-        if let (Some(grabbed_entity), Ok(camera_transform)) = (
-            player.grabbed_object,
-            camera_anchor_query.get(player.camera_anchor),
-        ) {}
-    }
-}
