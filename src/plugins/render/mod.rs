@@ -6,7 +6,7 @@ use bevy::{
     render::render_resource::{AsBindGroup, ShaderRef, ShaderType},
 };
 
-#[derive(Debug, Default, Reflect)]
+#[derive(Debug, Default, Reflect, Resource)]
 pub struct RenderResources {
     pub grid_texture: Handle<Image>,
     pub default_grid_material: Handle<GridMaterial>,

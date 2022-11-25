@@ -1,9 +1,6 @@
 use std::f32::consts::FRAC_PI_4;
 
-use bevy::{
-    prelude::*,
-    render::camera::{CameraProjection, DepthCalculation},
-};
+use bevy::{prelude::*, render::camera::CameraProjection};
 
 /// Camera projection which allows for an oblique near clipping plane, used for rendering portal virtual cameras.
 #[derive(Debug, Component, Clone, Reflect)]
@@ -57,10 +54,6 @@ impl CameraProjection for PortalCameraProjection {
 
     fn update(&mut self, width: f32, height: f32) {
         self.aspect_ratio = width / height;
-    }
-
-    fn depth_calculation(&self) -> DepthCalculation {
-        DepthCalculation::Distance
     }
 
     fn far(&self) -> f32 {

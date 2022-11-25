@@ -4,8 +4,6 @@ use bevy::{
     render::render_resource::{AsBindGroup, ShaderRef, ShaderType},
 };
 
-use super::PortalResources;
-
 #[derive(AsBindGroup, Debug, Clone, TypeUuid, Reflect)]
 #[uuid = "04901b22-de12-43a9-8e2e-79d333201b93"]
 pub struct OpenPortalMaterial {
@@ -46,23 +44,7 @@ impl Material for ClosedPortalMaterial {
     }
 }
 
-impl ClosedPortalMaterial {
-    pub fn update_time_uniform(
-        time: Res<Time>,
-        mut materials: ResMut<Assets<ClosedPortalMaterial>>,
-        resources: ResMut<PortalResources>,
-    ) {
-        let t = time.time_since_startup().as_secs_f32();
-        for mat in &resources.closed_materials {
-            if let Some(mut material) = materials.get_mut(mat) {
-                material.uniform.time = Vec4::splat(t);
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, ShaderType, Reflect)]
 pub struct ClosedPortalUniform {
     pub color: Color,
-    pub time: Vec4,
 }

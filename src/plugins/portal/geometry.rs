@@ -25,8 +25,8 @@ pub fn adjust_portal_origin_to_obstacles(
         false,
         QueryFilter {
             groups: Some(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
             ..default()
         },
@@ -39,8 +39,8 @@ pub fn adjust_portal_origin_to_obstacles(
         false,
         QueryFilter {
             groups: Some(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
             ..default()
         },
@@ -55,8 +55,8 @@ pub fn adjust_portal_origin_to_obstacles(
         false,
         QueryFilter {
             groups: Some(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
             ..default()
         },
@@ -69,8 +69,8 @@ pub fn adjust_portal_origin_to_obstacles(
         false,
         QueryFilter {
             groups: Some(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
             ..default()
         },

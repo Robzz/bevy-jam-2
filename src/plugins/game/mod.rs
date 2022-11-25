@@ -1,6 +1,6 @@
 use crate::plugins::*;
 
-use bevy::{prelude::*, reflect::FromReflect};
+use bevy::{log::LogPlugin, prelude::*, reflect::FromReflect};
 use bevy_rapier3d::prelude::*;
 use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
@@ -12,10 +12,6 @@ use super::{
     physics::*,
     portal::PortalTeleport,
 };
-
-// region:    --- Asset Constants
-const CROSSHAIR_SPRITE: &str = "crosshair.png";
-// endregion: --- Game Constants
 
 /// The different possible states of the game application.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -41,7 +37,26 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(DefaultPlugins);
+        app.add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        title: "Lost Portal Prototype v.0.666".to_string(),
+                        width: 1280.,
+                        height: 720.,
+                        ..Default::default()
+                    },
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: "wgpu=error,bevy_ecs::event=error".to_string(),
+                    ..default()
+                }),
+        );
 
         app.add_loopless_state(GameState::MainMenu);
         app.add_startup_system(game_startup);
@@ -87,11 +102,10 @@ impl Plugin for GamePlugin {
     }
 }
 
-#[derive(Debug, Clone, Default, Reflect)]
+#[derive(Debug, Clone, Default, Reflect, Resource)]
 pub struct GameResources {
     cube_mesh: Handle<Mesh>,
     cube_material: Handle<StandardMaterial>,
-    crosshair: Handle<Image>,
 }
 
 #[derive(Bundle)]
@@ -121,7 +135,7 @@ impl Default for PhysicsCubeBundle {
     }
 }
 
-#[derive(Debug, Clone, Component, Default, Reflect, FromReflect, PartialEq, Eq)]
+#[derive(Debug, Clone, Resource, Default, Reflect, FromReflect, PartialEq, Eq)]
 pub enum PlayerProgress {
     #[default]
     GettingStarted,
@@ -147,7 +161,6 @@ fn init_resources(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
     let mesh = meshes.add(shape::Cube { size: 0.2 }.into());
     let material = materials.add(StandardMaterial {
@@ -160,7 +173,6 @@ fn init_resources(
     commands.insert_resource(GameResources {
         cube_mesh: mesh,
         cube_material: material,
-        crosshair: asset_server.load(CROSSHAIR_SPRITE),
     });
 }
 
@@ -175,7 +187,7 @@ fn throw_cube(
         if input.just_pressed(Actions::ShootCube) {
             let mut cube_trf = cam_trf.compute_transform();
             cube_trf.translation += cam_trf.forward();
-            commands.spawn_bundle(PhysicsCubeBundle {
+            commands.spawn(PhysicsCubeBundle {
                 pbr_bundle: PbrBundle {
                     mesh: res.cube_mesh.clone(),
                     material: res.cube_material.clone(),

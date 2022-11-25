@@ -16,7 +16,7 @@ use bevy::{
 };
 use bevy_rapier3d::prelude::*;
 use euclid::Angle;
-use iyes_loopless::condition::IntoConditionalExclusiveSystem;
+use iyes_loopless::condition::IntoConditionalSystem;
 use leafwing_input_manager::prelude::*;
 
 use crate::plugins::{input::default_input_map, physics::*, portal::PortalTeleport};
@@ -111,11 +111,11 @@ fn spawn_controller(
     for (_spawner, id) in &spawners_query {
         let player_root = commands
             .entity(id)
-            .insert_bundle(InputManagerBundle {
+            .insert(InputManagerBundle {
                 action_state: ActionState::default(),
                 input_map: default_input_map(),
             })
-            .insert_bundle((
+            .insert((
                 RigidBody::Dynamic,
                 Ccd::disabled(),
                 Collider::capsule_y((PLAYER_HEIGHT - 0.8) / 2., 0.4),
@@ -141,7 +141,7 @@ fn spawn_controller(
         let material = primitive.material.clone().unwrap();
 
         let gun_entity = commands
-            .spawn_bundle(PbrBundle {
+            .spawn(PbrBundle {
                 mesh: primitive.mesh.clone(),
                 material,
                 transform: Transform {
@@ -155,14 +155,14 @@ fn spawn_controller(
             .id();
 
         let camera_anchor = commands
-            .spawn_bundle(SpatialBundle::from(Transform::from_translation(
+            .spawn(SpatialBundle::from(Transform::from_translation(
                 CAMERA_OFFSET,
             )))
-            .insert_bundle((Name::from("Camera anchor"), CameraAnchor))
+            .insert((Name::from("Camera anchor"), CameraAnchor))
             .id();
 
         let camera = commands
-            .spawn_bundle(Camera3dBundle {
+            .spawn(Camera3dBundle {
                 projection: Projection::Perspective(PerspectiveProjection {
                     fov: std::f32::consts::FRAC_PI_4,
                     // TODO: make the portal cameras use the main camera FOV so we can change this
@@ -172,7 +172,7 @@ fn spawn_controller(
                 }),
                 ..default()
             })
-            .insert_bundle((Name::from("Player camera"), FirstPersonCamera))
+            .insert((Name::from("Player camera"), FirstPersonCamera))
             .id();
 
         commands
@@ -327,8 +327,10 @@ fn process_controller_inputs(
                         cam_global_transform.forward(),
                         1.5,
                         true,
-                        QueryFilter::new()
-                            .groups(InteractionGroups::new(RAYCAST_GROUP, PROPS_GROUP)),
+                        QueryFilter::new().groups(InteractionGroups::new(
+                            RAYCAST_GROUP.bits().into(),
+                            PROPS_GROUP.bits().into(),
+                        )),
                     ) {
                         let (
                             prop_name,

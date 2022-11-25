@@ -48,13 +48,13 @@ pub fn make_test_arena(
         .into(),
     );
 
-    let mut ground = commands.spawn_bundle(PbrBundle {
+    let mut ground = commands.spawn(PbrBundle {
         mesh: ground_mesh.clone(),
         material: ground_material.clone(),
         transform: Transform::from_xyz(0., -WALL_THICKNESS / 2., 0.),
         ..default()
     });
-    ground.insert_bundle((
+    ground.insert((
         Name::from("Ground"),
         RigidBody::Fixed,
         Collider::cuboid(half_len * 1.1, WALL_THICKNESS / 2., half_len * 1.1),
@@ -70,13 +70,13 @@ pub fn make_test_arena(
                 Quat::from_axis_angle(Vec3::Y, i as f32 * FRAC_PI_2),
             );
             parent
-                .spawn_bundle(PbrBundle {
+                .spawn(PbrBundle {
                     mesh: wall_mesh.clone(),
                     material: mat,
                     transform,
                     ..default()
                 })
-                .insert_bundle((
+                .insert((
                     Name::from(format!("Wall_{}", i)),
                     RigidBody::Fixed,
                     Collider::cuboid(half_len, height / 2., WALL_THICKNESS / 2.),
@@ -84,13 +84,13 @@ pub fn make_test_arena(
                 ));
         }
         parent
-            .spawn_bundle(PbrBundle {
+            .spawn(PbrBundle {
                 mesh: ground_mesh,
                 material: ground_material,
                 transform: Transform::from_translation(Vec3::Y * height),
                 ..default()
             })
-            .insert_bundle((
+            .insert((
                 Name::from("Ceiling"),
                 RigidBody::Fixed,
                 Collider::cuboid(half_len * 1.1, WALL_THICKNESS / 2., half_len * 1.1),

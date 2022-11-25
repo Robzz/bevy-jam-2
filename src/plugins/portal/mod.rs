@@ -31,7 +31,7 @@ use camera_projection::PortalCameraProjection;
 use material::*;
 use noise::{
     utils::{NoiseMapBuilder, PlaneMapBuilder},
-    Fbm,
+    Fbm, Perlin,
 };
 
 use super::{first_person_controller::*, game::PlayerProgress, physics::*};
@@ -100,7 +100,6 @@ impl Plugin for PortalPlugin {
                     .with_system(create_portal_cameras::<0>)
                     .with_system(create_portal_cameras::<1>),
             )
-            .add_system(ClosedPortalMaterial::update_time_uniform)
             .add_system(set_portal_materials)
             .add_system_set(
                 SystemSet::new()
@@ -147,8 +146,8 @@ impl PortalPlugin {
             Real::MAX,
             true,
             QueryFilter::only_fixed().groups(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
         )?;
 
@@ -170,7 +169,7 @@ impl PortalPlugin {
             "Spawning portal at {}",
             &portal.mesh_bundle.transform.translation
         );
-        Some(commands.spawn_bundle(portal).id())
+        Some(commands.spawn(portal).id())
     }
 
     fn get_portal_plane(trf: &GlobalTransform) -> Vec4 {
@@ -180,7 +179,7 @@ impl PortalPlugin {
     }
 }
 
-#[derive(Debug, Default, Reflect)]
+#[derive(Debug, Default, Reflect, Resource)]
 pub struct PortalResources {
     noise_texture: Handle<Image>,
     render_targets: [Handle<Image>; 2],
@@ -224,7 +223,7 @@ impl<const N: u32> Portal<N> {
     }
 
     /// Return the collision groups filter which turns off collisions with this portal's surface.
-    pub fn filter_collisions(&self) -> u32 {
+    pub fn filter_collisions(&self) -> Group {
         match self.orientation {
             PortalOrientation::Horizontal => {
                 PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | WALLS_GROUP
@@ -234,7 +233,7 @@ impl<const N: u32> Portal<N> {
     }
 
     /// Return the collision groups filter which turns collisions with this portal's surface back on.
-    pub fn restore_collisions(&self) -> u32 {
+    pub fn restore_collisions(&self) -> Group {
         ALL_GROUPS
     }
 }
@@ -379,12 +378,12 @@ fn load_portal_assets(
         .into(),
     );
 
-    let mut fbm = Fbm::new();
+    let mut fbm = Fbm::<Perlin>::default();
     fbm.octaves = 3;
     fbm.frequency = 0.5;
     fbm.lacunarity = 2.;
     fbm.persistence = 0.6;
-    let noise_map = PlaneMapBuilder::new(&fbm)
+    let noise_map = PlaneMapBuilder::<_, 2>::new(&fbm)
         .set_size(1024, 1024)
         .set_x_bounds(-8.0, 8.0)
         .set_y_bounds(-8.0, 8.0)
@@ -422,7 +421,6 @@ fn load_portal_assets(
         // Orange
         uniform: ClosedPortalUniform {
             color: Color::rgba(1., 0.7, 0.2, 1.),
-            time: Vec4::ZERO,
         },
     });
     closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
@@ -430,7 +428,6 @@ fn load_portal_assets(
         // Blue
         uniform: ClosedPortalUniform {
             color: Color::rgba(0.2, 0.78, 1., 1.),
-            time: Vec4::ZERO,
         },
     });
 
@@ -549,7 +546,7 @@ fn create_portal_cameras<const N: u32>(
         if portal.camera.is_none() && portal_res.main_camera.is_some() {
             portal.camera = Some(
                 commands
-                    .spawn_bundle(Camera3dBundle {
+                    .spawn(Camera3dBundle {
                         camera: Camera {
                             // Render before the main camera.
                             priority: -1 - N as isize,
@@ -567,8 +564,8 @@ fn create_portal_cameras<const N: u32>(
                     })
                     .insert(PortalCamera::<N>)
                     .remove::<Projection>()
-                    .insert_bundle(VisibilityBundle {
-                        visibility: Visibility::visible(),
+                    .insert(VisibilityBundle {
+                        visibility: Visibility::VISIBLE,
                         ..default()
                     })
                     .id(),

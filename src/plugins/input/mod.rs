@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::CursorGrabMode};
 use leafwing_input_manager::{prelude::*, Actionlike};
 
 #[derive(Debug)]
@@ -48,14 +48,18 @@ pub fn default_input_map() -> InputMap<Actions> {
 fn toggle_on_start(mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
     window.set_cursor_visibility(false);
-    window.set_cursor_lock_mode(true);
+    window.set_cursor_grab_mode(CursorGrabMode::Confined);
 }
 
 fn toggle_mouse_capture(mut windows: ResMut<Windows>, tab_input: Res<Input<KeyCode>>) {
     let window = windows.get_primary_mut().unwrap();
-    let locked = window.cursor_locked();
     if tab_input.just_pressed(KeyCode::Tab) {
-        window.set_cursor_visibility(locked);
-        window.set_cursor_lock_mode(!locked);
+        if window.cursor_visible() {
+            window.set_cursor_visibility(false);
+            window.set_cursor_grab_mode(CursorGrabMode::Confined);
+        } else {
+            window.set_cursor_visibility(true);
+            window.set_cursor_grab_mode(CursorGrabMode::None);
+        }
     }
 }

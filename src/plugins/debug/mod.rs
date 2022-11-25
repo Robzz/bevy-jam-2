@@ -2,7 +2,7 @@
 
 pub mod draw;
 
-use bevy::prelude::*;
+use bevy::{app::PluginGroupBuilder, prelude::*};
 use bevy_rapier3d::prelude::RapierDebugRenderPlugin;
 
 #[derive(Debug)]
@@ -10,12 +10,12 @@ use bevy_rapier3d::prelude::RapierDebugRenderPlugin;
 pub struct DeveloperPlugins;
 
 impl PluginGroup for DeveloperPlugins {
-    fn build(&mut self, group: &mut bevy::app::PluginGroupBuilder) {
-        group
+    fn build(self) -> PluginGroupBuilder {
+        PluginGroupBuilder::start::<DeveloperPlugins>()
             .add(bevy_editor_pls::prelude::EditorPlugin)
             .add(RapierDebugRenderPlugin::default())
             .add(bevy_inspector_egui_rapier::InspectableRapierPlugin)
-            .add(DevelopmentPlugin);
+            .add(DevelopmentPlugin)
     }
 }
 
@@ -23,11 +23,6 @@ pub struct DevelopmentPlugin;
 
 impl Plugin for DevelopmentPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default())
-            .add_startup_system(enable_hot_reload);
+        app.add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::default());
     }
-}
-
-fn enable_hot_reload(asset_server: Res<AssetServer>) {
-    asset_server.watch_for_changes().unwrap()
 }
