@@ -2,7 +2,6 @@
 
 struct ClosedPortalMaterial {
     color: vec4<f32>,
-    time: vec4<f32>
 }
 
 @group(1) @binding(0)
@@ -17,7 +16,7 @@ fn fragment(
     @builtin(position) position: vec4<f32>,
     #import bevy_pbr::mesh_vertex_output
 ) -> @location(0) vec4<f32> {
-    let varying_uvs = vec2(fract(1. - pow((2. * uv.x) - 1., 2.) + material.time.x), 1. - uv.y);
+    let varying_uvs = vec2(fract(1. - pow((2. * uv.x) - 1., 2.) + globals.time), 1. - uv.y);
     let i = textureSample(texture, texture_sampler, varying_uvs).r;
     let color = vec4(i * material.color.rgb, 1.);
     return color;
