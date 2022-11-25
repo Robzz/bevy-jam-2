@@ -141,7 +141,7 @@ pub fn initiate_section_transition(
                         source: end,
                         destination,
                         open_animation: transition.open_animation.clone(),
-                        timer: Timer::from_seconds(3., false),
+                        timer: Timer::from_seconds(3., TimerMode::Once),
                         next_section_name: transition.target_level.clone(),
                         teleported: false,
                     })

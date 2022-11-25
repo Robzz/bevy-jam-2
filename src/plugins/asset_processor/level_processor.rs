@@ -464,7 +464,7 @@ impl LevelProcessor {
                     let mut colliders = HashMap::new();
                     let mut doors = HashMap::new();
                     let mut sensors = Vec::new();
-                    for scene_entity in scene_spawner.iter_instance_entities(**scene_id).unwrap() {
+                    for scene_entity in scene_spawner.iter_instance_entities(**scene_id) {
                         if let Ok((name, mesh_handle, opt_shape, entity)) =
                             fixed_geometry_query.get(scene_entity)
                         {
@@ -503,7 +503,7 @@ impl LevelProcessor {
                                 {
                                     let mesh = meshes.get(mesh_handle).unwrap();
                                     let collider =
-                                        colliders.entry(mesh_handle.id).or_insert_with(|| {
+                                        colliders.entry(mesh_handle.id()).or_insert_with(|| {
                                             Self::compute_collider(mesh, ColliderShape::Concave)
                                         });
                                     //.or_insert_with(|| Self::compute_collider(mesh, opt_shape.cloned().unwrap_or(ColliderShape::Concave)));
@@ -755,7 +755,7 @@ impl LevelProcessor {
             gltf.default_scene
                 .as_ref()
                 .expect("GLTF asset has no default scene")
-                .as_weak(),
+                .cast_weak(),
             level_name.to_owned(),
         );
         levels.add(level)

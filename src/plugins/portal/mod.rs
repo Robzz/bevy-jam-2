@@ -565,7 +565,7 @@ fn create_portal_cameras<const N: u32>(
                     .insert(PortalCamera::<N>)
                     .remove::<Projection>()
                     .insert(VisibilityBundle {
-                        visibility: Visibility::visible(),
+                        visibility: Visibility::VISIBLE,
                         ..default()
                     })
                     .id(),
