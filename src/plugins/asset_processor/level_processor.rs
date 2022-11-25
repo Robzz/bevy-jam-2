@@ -472,7 +472,7 @@ impl LevelProcessor {
                             if name.ends_with(LEVEL_STATIC_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
-                                commands.entity(entity).insert_bundle((
+                                commands.entity(entity).insert((
                                     CollisionGroups::new(
                                         WALLS_GROUP,
                                         ALL_GROUPS - DOOR_SENSORS_GROUP,
@@ -483,7 +483,7 @@ impl LevelProcessor {
                             } else if name.ends_with(LEVEL_GROUND_GEOMETRY_SUFFIX) {
                                 let mesh = meshes.get(mesh_handle).unwrap();
 
-                                commands.entity(entity).insert_bundle((
+                                commands.entity(entity).insert((
                                     CollisionGroups::new(
                                         GROUND_GROUP,
                                         ALL_GROUPS - DOOR_SENSORS_GROUP,
@@ -507,7 +507,7 @@ impl LevelProcessor {
                                             Self::compute_collider(mesh, ColliderShape::Concave)
                                         });
                                     //.or_insert_with(|| Self::compute_collider(mesh, opt_shape.cloned().unwrap_or(ColliderShape::Concave)));
-                                    commands.entity(entity).insert_bundle((
+                                    commands.entity(entity).insert((
                                         CollisionGroups::new(PROPS_GROUP, ALL_GROUPS),
                                         RigidBody::Dynamic,
                                         Velocity::default(),
@@ -534,7 +534,7 @@ impl LevelProcessor {
                             {
                                 let mesh = meshes.get(mesh_handle).unwrap();
                                 let shape = opt_shape.cloned().unwrap_or_default();
-                                commands.entity(entity).insert_bundle((
+                                commands.entity(entity).insert((
                                     RigidBody::Fixed,
                                     Self::compute_collider(mesh, shape),
                                     Sensor,
@@ -557,7 +557,7 @@ impl LevelProcessor {
                                 info!("Creating level transition to {}", _transition.target_level);
                                 let mesh = meshes.get(mesh_handle).unwrap();
                                 let shape = opt_shape.cloned().unwrap_or_default();
-                                commands.entity(entity).insert_bundle((
+                                commands.entity(entity).insert((
                                     RigidBody::Fixed,
                                     Self::compute_collider(mesh, shape),
                                     Sensor,
@@ -578,7 +578,7 @@ impl LevelProcessor {
                             {
                                 let mesh = meshes.get(mesh_handle).unwrap();
                                 let shape = opt_shape.cloned().unwrap_or_default();
-                                commands.entity(entity).insert_bundle((
+                                commands.entity(entity).insert((
                                     RigidBody::Fixed,
                                     Self::compute_collider(mesh, shape),
                                     Sensor,
@@ -633,7 +633,7 @@ impl LevelProcessor {
             }
 
             let scene_instance = commands
-                .spawn_bundle(SceneBundle {
+                .spawn(SceneBundle {
                     scene: level.scene.clone(),
                     ..default()
                 })
@@ -697,7 +697,7 @@ impl LevelProcessor {
                 .1
                 .to_owned();
             let player_entity = commands
-                .spawn_bundle(FirstPersonControllerBundle {
+                .spawn(FirstPersonControllerBundle {
                     spawner: FirstPersonControllerSpawner {},
                     spatial: SpatialBundle {
                         transform: spawn_node,

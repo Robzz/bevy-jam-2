@@ -183,7 +183,7 @@ fn throw_cube(
         if input.just_pressed(Actions::ShootCube) {
             let mut cube_trf = cam_trf.compute_transform();
             cube_trf.translation += cam_trf.forward();
-            commands.spawn_bundle(PhysicsCubeBundle {
+            commands.spawn(PhysicsCubeBundle {
                 pbr_bundle: PbrBundle {
                     mesh: res.cube_mesh.clone(),
                     material: res.cube_material.clone(),

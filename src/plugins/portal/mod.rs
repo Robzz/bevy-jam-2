@@ -100,7 +100,6 @@ impl Plugin for PortalPlugin {
                     .with_system(create_portal_cameras::<0>)
                     .with_system(create_portal_cameras::<1>),
             )
-            .add_system(ClosedPortalMaterial::update_time_uniform)
             .add_system(set_portal_materials)
             .add_system_set(
                 SystemSet::new()
@@ -170,7 +169,7 @@ impl PortalPlugin {
             "Spawning portal at {}",
             &portal.mesh_bundle.transform.translation
         );
-        Some(commands.spawn_bundle(portal).id())
+        Some(commands.spawn(portal).id())
     }
 
     fn get_portal_plane(trf: &GlobalTransform) -> Vec4 {
@@ -547,7 +546,7 @@ fn create_portal_cameras<const N: u32>(
         if portal.camera.is_none() && portal_res.main_camera.is_some() {
             portal.camera = Some(
                 commands
-                    .spawn_bundle(Camera3dBundle {
+                    .spawn(Camera3dBundle {
                         camera: Camera {
                             // Render before the main camera.
                             priority: -1 - N as isize,
@@ -565,7 +564,7 @@ fn create_portal_cameras<const N: u32>(
                     })
                     .insert(PortalCamera::<N>)
                     .remove::<Projection>()
-                    .insert_bundle(VisibilityBundle {
+                    .insert(VisibilityBundle {
                         visibility: Visibility::visible(),
                         ..default()
                     })
