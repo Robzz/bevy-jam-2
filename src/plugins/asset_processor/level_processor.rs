@@ -140,7 +140,7 @@ where
     }
 }
 
-#[derive(Debug, Default, Reflect, FromReflect)]
+#[derive(Debug, Default, Reflect, FromReflect, Resource)]
 pub struct CurrentLevel {
     level: Handle<Level>,
     pub(crate) section: String,
@@ -157,6 +157,7 @@ impl CurrentLevel {
     }
 }
 
+#[derive(Debug, Resource)]
 pub struct LevelProcessor {
     player_entity: Option<Entity>,
     current_level: Option<Handle<Level>>,

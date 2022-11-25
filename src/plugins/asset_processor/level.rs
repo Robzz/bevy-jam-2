@@ -35,7 +35,7 @@ pub struct SectionTransition {
     pub open_animation: Handle<AnimationClip>,
 }
 
-#[derive(Debug, Clone, Reflect)]
+#[derive(Debug, Clone, Reflect, Resource)]
 pub struct PendingTransition {
     pub source: Entity,
     pub destination: Entity,
@@ -64,7 +64,7 @@ pub struct Section {
     pub finish_point: Option<Entity>,
 }
 
-#[derive(Debug, Clone, Reflect, FromReflect)]
+#[derive(Debug, Clone, Reflect, FromReflect, Resource)]
 pub struct SectionTable {
     pub table: HashMap<String, Section>,
 }

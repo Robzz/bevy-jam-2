@@ -180,7 +180,7 @@ impl PortalPlugin {
     }
 }
 
-#[derive(Debug, Default, Reflect)]
+#[derive(Debug, Default, Reflect, Resource)]
 pub struct PortalResources {
     noise_texture: Handle<Image>,
     render_targets: [Handle<Image>; 2],

@@ -98,7 +98,7 @@ impl Plugin for GamePlugin {
     }
 }
 
-#[derive(Debug, Clone, Default, Reflect)]
+#[derive(Debug, Clone, Default, Reflect, Resource)]
 pub struct GameResources {
     cube_mesh: Handle<Mesh>,
     cube_material: Handle<StandardMaterial>,
@@ -131,7 +131,7 @@ impl Default for PhysicsCubeBundle {
     }
 }
 
-#[derive(Debug, Clone, Component, Default, Reflect, FromReflect, PartialEq, Eq)]
+#[derive(Debug, Clone, Resource, Default, Reflect, FromReflect, PartialEq, Eq)]
 pub enum PlayerProgress {
     #[default]
     GettingStarted,
