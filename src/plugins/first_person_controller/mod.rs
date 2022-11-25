@@ -16,7 +16,7 @@ use bevy::{
 };
 use bevy_rapier3d::prelude::*;
 use euclid::Angle;
-use iyes_loopless::condition::IntoConditionalExclusiveSystem;
+use iyes_loopless::condition::IntoConditionalSystem;
 use leafwing_input_manager::prelude::*;
 
 use crate::plugins::{input::default_input_map, physics::*, portal::PortalTeleport};
@@ -328,7 +328,7 @@ fn process_controller_inputs(
                         1.5,
                         true,
                         QueryFilter::new()
-                            .groups(InteractionGroups::new(RAYCAST_GROUP, PROPS_GROUP)),
+                            .groups(InteractionGroups::new(RAYCAST_GROUP.bits().into(), PROPS_GROUP.bits().into())),
                     ) {
                         let (
                             prop_name,

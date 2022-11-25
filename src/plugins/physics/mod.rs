@@ -1,15 +1,15 @@
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::{RapierConfiguration, TimestepMode};
+use bevy_rapier3d::prelude::{RapierConfiguration, TimestepMode, Group};
 
-pub const WALLS_GROUP: u32 = 0b0000_0001;
-pub const PROPS_GROUP: u32 = 0b0000_0010;
-pub const PORTAL_GROUP: u32 = 0b0000_0100;
-pub const PLAYER_GROUP: u32 = 0b0000_1000;
-pub const RAYCAST_GROUP: u32 = 0b0001_0000;
-pub const GROUND_GROUP: u32 = 0b0010_0000;
-pub const DOOR_SENSORS_GROUP: u32 = 0b0100_0000;
-pub const LEVEL_TRANSITION_SENSORS_GROUP: u32 = 0b1000_0000;
-pub const ALL_GROUPS: u32 = 0b1111_1111;
+pub const WALLS_GROUP: Group = Group::GROUP_1;
+pub const PROPS_GROUP: Group = Group::GROUP_2;
+pub const PORTAL_GROUP: Group = Group::GROUP_3;
+pub const PLAYER_GROUP: Group = Group::GROUP_4;
+pub const RAYCAST_GROUP: Group = Group::GROUP_5;
+pub const GROUND_GROUP: Group = Group::GROUP_6;
+pub const DOOR_SENSORS_GROUP: Group = Group::GROUP_7;
+pub const LEVEL_TRANSITION_SENSORS_GROUP: Group = Group::GROUP_8;
+pub const ALL_GROUPS: Group = Group::ALL;
 
 pub struct PhysicsPlugin;
 

@@ -146,8 +146,8 @@ impl PortalPlugin {
             Real::MAX,
             true,
             QueryFilter::only_fixed().groups(InteractionGroups::new(
-                RAYCAST_GROUP,
-                WALLS_GROUP | GROUND_GROUP,
+                RAYCAST_GROUP.bits().into(),
+                (WALLS_GROUP | GROUND_GROUP).bits().into(),
             )),
         )?;
 
@@ -223,7 +223,7 @@ impl<const N: u32> Portal<N> {
     }
 
     /// Return the collision groups filter which turns off collisions with this portal's surface.
-    pub fn filter_collisions(&self) -> u32 {
+    pub fn filter_collisions(&self) -> Group {
         match self.orientation {
             PortalOrientation::Horizontal => {
                 PLAYER_GROUP | PROPS_GROUP | PORTAL_GROUP | WALLS_GROUP
@@ -233,7 +233,7 @@ impl<const N: u32> Portal<N> {
     }
 
     /// Return the collision groups filter which turns collisions with this portal's surface back on.
-    pub fn restore_collisions(&self) -> u32 {
+    pub fn restore_collisions(&self) -> Group {
         ALL_GROUPS
     }
 }
