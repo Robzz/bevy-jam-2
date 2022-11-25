@@ -37,7 +37,22 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(DefaultPlugins);
+        app.add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        title: "Lost Portal Prototype v.0.666".to_string(),
+                        width: 1280.,
+                        height: 720.,
+                        ..Default::default()
+                    },
+                    ..default()
+                }),
+        );
 
         app.add_loopless_state(GameState::MainMenu);
         app.add_startup_system(game_startup);

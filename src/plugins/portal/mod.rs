@@ -422,7 +422,6 @@ fn load_portal_assets(
         // Orange
         uniform: ClosedPortalUniform {
             color: Color::rgba(1., 0.7, 0.2, 1.),
-            time: Vec4::ZERO,
         },
     });
     closed_mats[1] = closed_materials.add(ClosedPortalMaterial {
@@ -430,7 +429,6 @@ fn load_portal_assets(
         // Blue
         uniform: ClosedPortalUniform {
             color: Color::rgba(0.2, 0.78, 1., 1.),
-            time: Vec4::ZERO,
         },
     });
 
