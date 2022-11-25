@@ -1,6 +1,6 @@
 use crate::plugins::*;
 
-use bevy::{prelude::*, reflect::FromReflect};
+use bevy::{prelude::*, reflect::FromReflect, log::LogPlugin};
 use bevy_rapier3d::prelude::*;
 use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
@@ -50,6 +50,10 @@ impl Plugin for GamePlugin {
                         height: 720.,
                         ..Default::default()
                     },
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: "wgpu=error,bevy_ecs::event=error".to_string(),
                     ..default()
                 }),
         );
