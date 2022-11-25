@@ -31,7 +31,7 @@ use camera_projection::PortalCameraProjection;
 use material::*;
 use noise::{
     utils::{NoiseMapBuilder, PlaneMapBuilder},
-    Fbm,
+    Fbm, Perlin,
 };
 
 use super::{first_person_controller::*, game::PlayerProgress, physics::*};
@@ -378,12 +378,12 @@ fn load_portal_assets(
         .into(),
     );
 
-    let mut fbm = Fbm::new();
+    let mut fbm = Fbm::<Perlin>::default();
     fbm.octaves = 3;
     fbm.frequency = 0.5;
     fbm.lacunarity = 2.;
     fbm.persistence = 0.6;
-    let noise_map = PlaneMapBuilder::new(&fbm)
+    let noise_map = PlaneMapBuilder::<_, 2>::new(&fbm)
         .set_size(1024, 1024)
         .set_x_bounds(-8.0, 8.0)
         .set_y_bounds(-8.0, 8.0)
