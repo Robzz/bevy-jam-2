@@ -13,10 +13,6 @@ use super::{
     portal::PortalTeleport,
 };
 
-// region:    --- Asset Constants
-const CROSSHAIR_SPRITE: &str = "crosshair.png";
-// endregion: --- Game Constants
-
 /// The different possible states of the game application.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum GameState {
@@ -91,7 +87,6 @@ impl Plugin for GamePlugin {
 pub struct GameResources {
     cube_mesh: Handle<Mesh>,
     cube_material: Handle<StandardMaterial>,
-    crosshair: Handle<Image>,
 }
 
 #[derive(Bundle)]
@@ -147,7 +142,6 @@ fn init_resources(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
     let mesh = meshes.add(shape::Cube { size: 0.2 }.into());
     let material = materials.add(StandardMaterial {
@@ -160,7 +154,6 @@ fn init_resources(
     commands.insert_resource(GameResources {
         cube_mesh: mesh,
         cube_material: material,
-        crosshair: asset_server.load(CROSSHAIR_SPRITE),
     });
 }
 
