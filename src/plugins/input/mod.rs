@@ -57,8 +57,7 @@ fn toggle_mouse_capture(mut windows: ResMut<Windows>, tab_input: Res<Input<KeyCo
         if window.cursor_visible() {
             window.set_cursor_visibility(false);
             window.set_cursor_grab_mode(CursorGrabMode::Confined);
-        }
-        else {
+        } else {
             window.set_cursor_visibility(true);
             window.set_cursor_grab_mode(CursorGrabMode::None);
         }

@@ -327,8 +327,10 @@ fn process_controller_inputs(
                         cam_global_transform.forward(),
                         1.5,
                         true,
-                        QueryFilter::new()
-                            .groups(InteractionGroups::new(RAYCAST_GROUP.bits().into(), PROPS_GROUP.bits().into())),
+                        QueryFilter::new().groups(InteractionGroups::new(
+                            RAYCAST_GROUP.bits().into(),
+                            PROPS_GROUP.bits().into(),
+                        )),
                     ) {
                         let (
                             prop_name,

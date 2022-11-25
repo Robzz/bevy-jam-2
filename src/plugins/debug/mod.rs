@@ -2,7 +2,7 @@
 
 pub mod draw;
 
-use bevy::{prelude::*, app::PluginGroupBuilder};
+use bevy::{app::PluginGroupBuilder, prelude::*};
 use bevy_rapier3d::prelude::RapierDebugRenderPlugin;
 
 #[derive(Debug)]

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::{RapierConfiguration, TimestepMode, Group};
+use bevy_rapier3d::prelude::{Group, RapierConfiguration, TimestepMode};
 
 pub const WALLS_GROUP: Group = Group::GROUP_1;
 pub const PROPS_GROUP: Group = Group::GROUP_2;

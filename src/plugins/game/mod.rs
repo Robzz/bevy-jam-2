@@ -1,6 +1,6 @@
 use crate::plugins::*;
 
-use bevy::{prelude::*, reflect::FromReflect, log::LogPlugin};
+use bevy::{log::LogPlugin, prelude::*, reflect::FromReflect};
 use bevy_rapier3d::prelude::*;
 use iyes_loopless::prelude::{AppLooplessStateExt, IntoConditionalSystem};
 use leafwing_input_manager::prelude::ActionState;
